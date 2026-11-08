@@ -38,10 +38,11 @@ if `uxplay` is installed there (for example `brew install uxplay` or `apt instal
 - **Play on this PC** (default): audio goes through the PC's default output.
 - **Mute:** the PC accepts the audio but doesn't play it. iOS still sends it, so the
   phone is silent too.
-- **Keep on the phone (experimental):** AirBridge advertises no audio support
-  (`-noaudiofeat`, from `patches/0001-noaudiofeat.patch`), so iOS may keep playing
-  sound on the phone while it mirrors the picture. This isn't documented by Apple and
-  may behave differently between iOS versions.
+- **Keep on the phone:** AirBridge advertises no audio support (`-noaudiofeat`, from
+  `patches/0001-noaudiofeat.patch`), so iOS keeps playing sound on the phone while
+  the picture goes to the PC. Handy when your headset is plugged into the PC. Tested
+  on an iPhone (November 2026). This relies on undocumented iOS behaviour, so a future
+  iOS update could change it. Start mirroring again after switching modes.
 
 ### Not included
 
