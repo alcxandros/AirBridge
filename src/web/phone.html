@@ -23,7 +23,7 @@
   header p.off { color:var(--err); }
   main { flex:1; overflow:auto; padding: 8px 16px 16px; max-width:560px; width:100%; margin:0 auto; }
   nav { display:flex; border-top:1px solid var(--line); background:var(--card); padding-bottom: env(safe-area-inset-bottom); }
-  nav button { flex:1; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; padding:8px 0 10px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  nav button { flex:1; min-width:0; border:0; background:none; color:var(--muted); font:inherit; font-size:11px; padding:8px 0 10px; display:flex; flex-direction:column; align-items:center; gap:2px; }
   nav button svg { width:22px; height:22px; }
   nav button.on { color:var(--accent); }
   section { display:none; }
@@ -65,6 +65,15 @@
   .card .actions { flex-wrap:wrap; }
   a.button { display:inline-block; padding:8px 14px; border-radius:10px; background:var(--accent); color:#fff; text-decoration:none; font-weight:600; }
   .small { font-size:12px; }
+  /* screen viewer */
+  #screenWrap { position:relative; background:#000; border-radius:14px; overflow:hidden; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; }
+  #screenWrap video { width:100%; height:100%; object-fit:contain; touch-action:none; background:#000; }
+  #screenWrap .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#c9ced6; font-size:14px; text-align:center; padding:16px; pointer-events:none; }
+  #screenWrap.fill { position:fixed; inset:0; z-index:50; border-radius:0; aspect-ratio:auto; }
+  #exitFill { position:absolute; top:calc(8px + env(safe-area-inset-top)); right:8px; z-index:51; background:rgba(0,0,0,.55); color:#fff; border:0; border-radius:20px; padding:6px 12px; font:inherit; font-size:13px; }
+  .screen-actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .screen-actions button { flex:1; min-width:30%; }
+  #tab-screen .ghost.on { background:var(--accent); color:#fff; border-color:var(--accent); }
   #expired { text-align:center; padding:40px 8px; }
   #expired h2 { font-size:18px; }
   .hidden { display:none !important; }
@@ -117,6 +126,19 @@
     <ul id="sendList"></ul>
   </section>
 
+  <section id="tab-screen">
+    <div id="screenWrap">
+      <video id="screen" autoplay playsinline muted></video>
+      <div class="overlay" id="screenMsg">Screen sharing is off. Turn on “Share screen to phone” in AirBridge on the computer.</div>
+      <button id="exitFill" class="hidden">Done</button>
+    </div>
+    <div class="screen-actions">
+      <button class="ghost" id="screenSound">Sound on</button>
+      <button class="ghost" id="screenFill">Fill screen</button>
+    </div>
+    <p class="muted small" id="screenHint">Turn your phone sideways and use “Fill screen” for the biggest picture.</p>
+  </section>
+
   <section id="tab-get">
     <h2>Shared from the computer</h2>
     <p class="muted" id="getEmpty">Nothing yet. Drop files into AirBridge on the computer and they'll appear here.</p>
@@ -167,6 +189,7 @@
 
 <nav>
   <button data-tab="send" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>Send</button>
+  <button data-tab="screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Screen</button>
   <button data-tab="get"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>Get</button>
   <button data-tab="clip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M9 4h6v3H9z"/></svg>Clipboard</button>
   <button data-tab="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg>Link</button>
@@ -192,6 +215,7 @@
     document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === 'tab-' + name));
     try { sessionStorage.setItem('tab', name); } catch {}
+    if (window.screenReady) updateWatching(); // not before the viewer code has loaded
   }
   document.querySelectorAll('nav button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
   try { const t = sessionStorage.getItem('tab'); if (t && $('tab-' + t)) showTab(t); } catch {}
@@ -201,8 +225,13 @@
   function connect() {
     ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws' + q);
     ws.onopen = () => { retry = 0; setConn(true); clearInterval(pollTimer); pollTimer = null; };
-    ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === 'state') render(m); };
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.type === 'state') render(m);
+      else if (m.type === 'cast-signal') onCastSignal(m.data);
+    };
     ws.onclose = (e) => {
+      stopWatching(false); // the PC side forgets this connection; rejoin after reconnecting
       if (e.code === 4001) { clearInterval(pollTimer); showExpired(); return; }
       setConn(false);
       if (!pollTimer) pollTimer = setInterval(poll, 4000);
@@ -218,6 +247,10 @@
     $('uploadsOff').classList.toggle('hidden', s.uploads);
     $('remoteOff').classList.toggle('hidden', s.remote);
     $('remoteOn').classList.toggle('hidden', !s.remote);
+    $('screenHint').textContent = s.remote
+      ? 'Tap the picture to click there on the PC. Two-finger tap = right-click, two-finger drag = scroll.'
+      : 'Turn your phone sideways and use “Fill screen” for the biggest picture. Turn on remote control in AirBridge to tap and click on the PC.';
+    if (window.screenReady) updateWatching();
     // shared files
     const ul = $('getList');
     ul.innerHTML = '';
@@ -376,6 +409,140 @@
     resetKb();
   });
   kb.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send({ type: 'k', k: 'enter' }); } });
+
+  // ---- watch the PC screen (WebRTC; the PC sends the offer) ----
+  const video = $('screen');
+  let pc = null, pendingIce = [], retryTimer = null;
+  const screenMsg = (text) => { $('screenMsg').textContent = text || ''; $('screenMsg').classList.toggle('hidden', !text); };
+
+  function wantWatching() {
+    return state.cast && $('tab-screen').classList.contains('on') && ws && ws.readyState === 1 && !document.hidden;
+  }
+
+  function updateWatching() {
+    if (typeof RTCPeerConnection === 'undefined') { screenMsg("This browser can't show the PC screen."); return; }
+    if (!state.cast) { stopWatching(true); screenMsg('Screen sharing is off. Turn on “Share screen to phone” in AirBridge on the computer.'); return; }
+    if (wantWatching() && !pc) startWatching();
+    else if (!wantWatching() && pc) stopWatching(true);
+  }
+
+  function startWatching() {
+    clearTimeout(retryTimer);
+    screenMsg('Connecting to the PC screen…');
+    pc = new RTCPeerConnection({ iceServers: [] });
+    pendingIce = [];
+    const me = pc;
+    pc.ontrack = (e) => {
+      if (video.srcObject !== e.streams[0]) video.srcObject = e.streams[0];
+      video.play().catch(() => {});
+    };
+    pc.onicecandidate = (e) => send({ type: 'cast-signal', data: { candidate: e.candidate ? e.candidate.toJSON() : null } });
+    pc.onconnectionstatechange = () => {
+      if (pc !== me) return;
+      if (me.connectionState === 'connected') screenMsg('');
+      if (me.connectionState === 'failed') {
+        // Try again shortly (e.g. Wi-Fi hiccup).
+        stopWatching(true);
+        screenMsg('Connection lost. Retrying…');
+        retryTimer = setTimeout(updateWatching, 2000);
+      }
+    };
+    send({ type: 'cast-join' });
+  }
+
+  async function onCastSignal(data) {
+    if (!pc || !data) return;
+    try {
+      if (data.sdp && data.sdp.type === 'offer') {
+        await pc.setRemoteDescription(data.sdp);
+        for (const c of pendingIce.splice(0)) await pc.addIceCandidate(c);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        send({ type: 'cast-signal', data: { sdp: pc.localDescription.toJSON() } });
+      } else if (data.candidate) {
+        if (pc.remoteDescription) await pc.addIceCandidate(data.candidate);
+        else pendingIce.push(data.candidate);
+      }
+    } catch (e) {
+      screenMsg('Could not connect to the PC screen: ' + e.message);
+    }
+  }
+
+  function stopWatching(tellPc) {
+    if (!pc) return;
+    try { pc.close(); } catch {}
+    pc = null;
+    video.srcObject = null;
+    if (tellPc) send({ type: 'cast-leave' });
+  }
+  document.addEventListener('visibilitychange', updateWatching);
+
+  // Sound: browsers only allow audio after a tap.
+  $('screenSound').onclick = () => {
+    video.muted = !video.muted;
+    if (!video.muted) video.play().catch(() => {});
+    $('screenSound').textContent = video.muted ? 'Sound on' : 'Sound off';
+    $('screenSound').classList.toggle('on', !video.muted);
+  };
+  // Fill screen: a fixed overlay (iPhone Safari has no element full-screen), plus
+  // real full-screen where available (Android).
+  const wrap = $('screenWrap');
+  function setFill(on) {
+    wrap.classList.toggle('fill', on);
+    $('exitFill').classList.toggle('hidden', !on);
+    if (on && wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
+    if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  $('screenFill').onclick = () => setFill(true);
+  $('exitFill').onclick = () => setFill(false);
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && wrap.classList.contains('fill')) setFill(false); });
+
+  // Taps on the picture -> clicks on the PC (only when remote control is on).
+  function pictureFraction(clientX, clientY) {
+    const r = video.getBoundingClientRect();
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return null;
+    // object-fit: contain -> find the letterboxed picture inside the element.
+    const scale = Math.min(r.width / vw, r.height / vh);
+    const w = vw * scale, h = vh * scale;
+    const x = (clientX - r.left - (r.width - w) / 2) / w;
+    const y = (clientY - r.top - (r.height - h) / 2) / h;
+    return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+  }
+  let vt = null;
+  video.addEventListener('touchstart', (e) => {
+    if (!state.remote) return;
+    e.preventDefault();
+    if (!vt) vt = { start: Date.now(), fingers: 0, moved: 0, first: { x: e.touches[0].clientX, y: e.touches[0].clientY }, last: null };
+    vt.fingers = Math.max(vt.fingers, e.touches.length);
+    vt.last = centroid(e.touches);
+  }, { passive: false });
+  video.addEventListener('touchmove', (e) => {
+    if (!state.remote || !vt) return;
+    e.preventDefault();
+    const c = centroid(e.touches);
+    const dy = c.y - vt.last.y;
+    vt.moved += Math.abs(c.x - vt.last.x) + Math.abs(dy);
+    vt.last = c;
+    if (e.touches.length >= 2) { acc.w += dy * 4; schedule(); }
+  }, { passive: false });
+  video.addEventListener('touchend', (e) => {
+    if (!state.remote || !vt) return;
+    e.preventDefault();
+    if (e.touches.length) return;
+    if (Date.now() - vt.start < 300 && vt.moved < 12) {
+      const p = pictureFraction(vt.first.x, vt.first.y);
+      if (p) send({ type: 'tap', x: p.x, y: p.y, b: vt.fingers >= 2 ? 'r' : 'l' });
+    }
+    vt = null;
+  }, { passive: false });
+  video.addEventListener('click', (e) => {
+    // Mouse users (e.g. a laptop browser): click = click.
+    if (!state.remote || e.pointerType === 'touch') return;
+    const p = pictureFraction(e.clientX, e.clientY);
+    if (p) send({ type: 'tap', x: p.x, y: p.y, b: 'l' });
+  });
+  window.screenReady = true;
 
   // ---- sign in, remember this phone, and move to https when trusted ----
   function showExpired() {

@@ -9,7 +9,8 @@
 //   GET  /api/whoami       session or paired device; HTTPS port
 //   POST /api/pair         QR session -> long-lived device token (remembered phone)
 //   GET  /airbridge-ca.crt local CA for HTTPS (installed on the phone once)
-//   WS   /ws               live state pushes; remote mouse/keyboard input
+//   WS   /ws               live state pushes; remote mouse/keyboard input;
+//                          WebRTC signaling for viewing the PC screen (cast-*)
 
 const http = require('http');
 const fs = require('fs');
@@ -60,6 +61,32 @@ function inputToCommands(msg) {
     }
     default: return [];
   }
+}
+
+/** WebRTC answer / ICE candidate from a phone, reduced to the expected shape. */
+function castSignal(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (data.sdp && data.sdp.type === 'answer' && typeof data.sdp.sdp === 'string' && data.sdp.sdp.length < 60000) {
+    return { sdp: { type: 'answer', sdp: data.sdp.sdp } };
+  }
+  const c = data.candidate;
+  if (c && typeof c === 'object' && typeof c.candidate === 'string' && c.candidate.length < 1000) {
+    return {
+      candidate: {
+        candidate: c.candidate,
+        sdpMid: typeof c.sdpMid === 'string' ? c.sdpMid.slice(0, 32) : null,
+        sdpMLineIndex: Number.isInteger(c.sdpMLineIndex) ? c.sdpMLineIndex : null,
+      },
+    };
+  }
+  return null;
+}
+
+/** Tap on the shared screen: x, y as fractions (0..1) of the picture. */
+function pointerMsg(msg) {
+  const x = Number(msg.x), y = Number(msg.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return { x, y, b: ['l', 'r'].includes(msg.b) ? msg.b : 'l' };
 }
 
 // Only plain web links may be opened on the PC.
@@ -156,7 +183,7 @@ class PhoneServer extends EventEmitter {
    */
   constructor(opts) {
     super();
-    this.opts = { remoteEnabled: () => false, getShared: () => [], getClip: () => null, getCaCert: () => null, devices: null, ...opts };
+    this.opts = { remoteEnabled: () => false, castActive: () => false, getShared: () => [], getClip: () => null, getCaCert: () => null, devices: null, ...opts };
     this.token = crypto.randomBytes(16).toString('hex');
     this.server = null;
     this.tlsServer = null;
@@ -246,6 +273,7 @@ class PhoneServer extends EventEmitter {
       device: this.opts.deviceName || 'your computer',
       uploads: !!this.opts.isEnabled(),
       remote: !!this.opts.remoteEnabled(),
+      cast: !!this.opts.castActive(),
       shared: this.opts.getShared().map(({ id, name, size }) => ({ id, name, size })),
       clip: this.opts.getClip(),
     };
@@ -271,20 +299,53 @@ class PhoneServer extends EventEmitter {
     }
     this.wss.handleUpgrade(req, socket, head, (ws) => {
       ws.who = who;
+      ws.id = crypto.randomBytes(6).toString('hex');
       this.emit('clients', this.clientCount());
       ws.send(JSON.stringify({ type: 'state', ...this.state() }));
       ws.on('message', (data) => {
-        if (!this.opts.remoteEnabled()) return;
         let msg;
         try {
           msg = JSON.parse(data.toString());
         } catch {
           return;
         }
+        if (!msg || typeof msg !== 'object') return;
+        // Screen viewing (PC -> phone): WebRTC signaling, only while sharing is on.
+        if (msg.type === 'cast-join' || msg.type === 'cast-leave' || msg.type === 'cast-signal') {
+          if (!this.opts.castActive()) return;
+          if (msg.type === 'cast-signal') {
+            const sig = castSignal(msg.data);
+            if (sig) this.emit('cast', { client: ws.id, type: 'signal', data: sig });
+          } else {
+            ws.watching = msg.type === 'cast-join';
+            this.emit('cast', { client: ws.id, type: msg.type === 'cast-join' ? 'join' : 'leave' });
+          }
+          return;
+        }
+        if (!this.opts.remoteEnabled()) return;
+        // Tap on the shared screen: click at that point.
+        if (msg.type === 'tap') {
+          const p = pointerMsg(msg);
+          if (p) this.emit('pointer', p);
+          return;
+        }
         for (const line of inputToCommands(msg)) this.emit('input', line);
       });
-      ws.on('close', () => this.emit('clients', this.clientCount()));
+      ws.on('close', () => {
+        if (ws.watching) this.emit('cast', { client: ws.id, type: 'leave' });
+        this.emit('clients', this.clientCount());
+      });
     });
+  }
+
+  /** Send a message to one phone page (by connection id). */
+  sendTo(client, obj) {
+    if (!this.wss) return;
+    for (const ws of this.wss.clients) if (ws.id === client && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  }
+
+  watcherCount() {
+    return this.wss ? [...this.wss.clients].filter((ws) => ws.watching).length : 0;
   }
 
   handle(req, res) {
@@ -487,4 +548,4 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-module.exports = { PhoneServer, sanitizeFilename, inputToCommands, normalizeLink };
+module.exports = { PhoneServer, sanitizeFilename, inputToCommands, normalizeLink, castSignal, pointerMsg };

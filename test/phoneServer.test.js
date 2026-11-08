@@ -390,3 +390,86 @@ test('buildArgs: recording prefix uses forward slashes', () => {
   assert.deepEqual(a.slice(a.indexOf('-mp4'), a.indexOf('-mp4') + 2), ['-mp4', 'C:/Users/A B/Videos/AirBridge 2026-11-07']);
   assert.ok(!buildArgs({ deviceName: 'PC', recordSessions: false, recordPrefix: 'x' }).includes('-mp4'));
 });
+
+// ---- sharing the PC screen to the phone ----
+const { castSignal, pointerMsg } = require('../src/phoneServer');
+const { tapToAbsolute, unionRect } = require('../src/pointer');
+
+test('castSignal keeps only well-formed answers and ICE candidates', () => {
+  assert.deepEqual(castSignal({ sdp: { type: 'answer', sdp: 'v=0', extra: 1 } }), { sdp: { type: 'answer', sdp: 'v=0' } });
+  assert.equal(castSignal({ sdp: { type: 'offer', sdp: 'v=0' } }), null); // phones only answer
+  assert.equal(castSignal({ sdp: { type: 'answer', sdp: 'x'.repeat(70000) } }), null);
+  assert.deepEqual(castSignal({ candidate: { candidate: 'candidate:1 1 udp 1 192.168.1.5 5000 typ host', sdpMid: '0', sdpMLineIndex: 0, junk: true } }), {
+    candidate: { candidate: 'candidate:1 1 udp 1 192.168.1.5 5000 typ host', sdpMid: '0', sdpMLineIndex: 0 },
+  });
+  assert.equal(castSignal({ candidate: { candidate: 5 } }), null);
+  assert.equal(castSignal('nope'), null);
+});
+
+test('pointerMsg validates taps', () => {
+  assert.deepEqual(pointerMsg({ x: 0.5, y: 0.25, b: 'r' }), { x: 0.5, y: 0.25, b: 'r' });
+  assert.deepEqual(pointerMsg({ x: 0, y: 1 }), { x: 0, y: 1, b: 'l' });
+  assert.equal(pointerMsg({ x: 1.2, y: 0.5 }), null);
+  assert.equal(pointerMsg({ x: 'a', y: 0.5 }), null);
+});
+
+test('tapToAbsolute maps taps across multi-monitor desktops', () => {
+  const left = { x: 0, y: 0, width: 1920, height: 1080 };
+  const right = { x: 1920, y: -200, width: 2560, height: 1440 };
+  const virt = unionRect([left, right]);
+  assert.deepEqual(virt, { x: 0, y: -200, width: 4480, height: 1440 });
+  // Top-left of the right-hand monitor.
+  const [ax, ay] = tapToAbsolute({ x: 0, y: 0 }, right, virt);
+  assert.equal(ax, Math.round((1920 * 65535) / 4479));
+  assert.equal(ay, 0);
+  // Bottom-right corner of the whole desktop.
+  assert.deepEqual(tapToAbsolute({ x: 1, y: 1 }, right, virt), [65535, 65535]);
+  // Centre of a single-monitor desktop.
+  assert.deepEqual(tapToAbsolute({ x: 0.5, y: 0.5 }, left, left), [32768, 32768]);
+});
+
+test('screen-share signaling only flows while sharing is on; taps need remote control', async () => {
+  let casting = false;
+  let remote = false;
+  await withServer(
+    async ({ srv, base }) => {
+      const events = [];
+      srv.on('cast', (e) => events.push(e.type));
+      srv.on('pointer', (p) => events.push(`tap ${p.x},${p.y}`));
+      const { ws, first } = await wsOpen(`${base.replace('http', 'ws')}/ws?t=${srv.token}`);
+      assert.equal((await first).cast, false);
+      ws.send(JSON.stringify({ type: 'cast-join' }));
+      ws.send(JSON.stringify({ type: 'tap', x: 0.5, y: 0.5 }));
+      await new Promise((r) => setTimeout(r, 50));
+      assert.deepEqual(events, []); // sharing off, remote off
+      casting = true;
+      remote = true;
+      ws.send(JSON.stringify({ type: 'cast-join' }));
+      ws.send(JSON.stringify({ type: 'cast-signal', data: { sdp: { type: 'answer', sdp: 'v=0' } } }));
+      ws.send(JSON.stringify({ type: 'cast-signal', data: { evil: true } }));
+      ws.send(JSON.stringify({ type: 'tap', x: 0.5, y: 0.5 }));
+      await new Promise((r) => setTimeout(r, 50));
+      assert.deepEqual(events, ['join', 'signal', 'tap 0.5,0.5']);
+      // Messages to one viewer reach only that connection.
+      const got = new Promise((r) => ws.once('message', (d) => r(JSON.parse(d.toString()))));
+      const client = [...srv.wss.clients][0].id;
+      srv.sendTo(client, { type: 'cast-signal', data: { sdp: { type: 'offer', sdp: 'v=0' } } });
+      assert.equal((await got).type, 'cast-signal');
+      // Closing the page tells the caster the viewer left.
+      ws.close();
+      await new Promise((r) => setTimeout(r, 100));
+      assert.equal(events.at(-1), 'leave');
+    },
+    { castActive: () => casting, remoteEnabled: () => remote },
+  );
+});
+
+test('settings reject unknown values for enum settings', () => {
+  const { Settings } = require('../src/settings');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'airbridge-enum-'));
+  const s = new Settings(dir);
+  assert.equal(s.update({ castAudio: 'phone' }).castAudio, 'phone');
+  assert.equal(s.update({ castAudio: 'loud' }).castAudio, 'phone');
+  assert.equal(s.update({ castQuality: 'ultra' }).castQuality, 'sharp');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

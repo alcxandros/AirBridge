@@ -6,6 +6,7 @@
 //   airbridge-helper windows <pid>  list that process's visible windows (for screenshots)
 //   airbridge-helper input     read input commands from stdin, one per line:
 //       m <dx> <dy>            relative mouse move
+//       a <x> <y>              absolute move on the virtual desktop (0..65535 each)
 //       d <l|r|m> / u <l|r|m>  button down / up
 //       c <l|r|m>              click
 //       w <n> / h <n>          vertical / horizontal wheel (120 = one notch)
@@ -146,6 +147,13 @@ static int inputLoop() {
       case 'm': {
         long dx = 0, dy = 0;
         if (sscanf(arg, "%ld %ld", &dx, &dy) == 2) mouseFlags(MOUSEEVENTF_MOVE, 0, dx, dy);
+        break;
+      }
+      case 'a': {
+        // Absolute position on the virtual desktop, 0..65535 on each axis.
+        long x = 0, y = 0;
+        if (sscanf(arg, "%ld %ld", &x, &y) == 2 && x >= 0 && x <= 65535 && y >= 0 && y <= 65535)
+          mouseFlags(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, x, y);
         break;
       }
       case 'd': mouseFlags(buttonFlag(arg[0], true)); break;

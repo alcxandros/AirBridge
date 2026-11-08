@@ -16,6 +16,10 @@
   <span>Your network <b id="publicNames"></b> is set to <b>Public</b>, so Windows blocks iPhones from finding this computer. Switch it to <b>Private</b>.</span>
   <button class="ghost" id="fixNetwork">Open network settings</button>
 </div>
+<div class="banner sharing hidden" id="castBanner">
+  <span>🔴 <b>Your screen is being shared</b> <span id="castBannerViewers"></span></span>
+  <button class="ghost" id="castBannerStop">Stop sharing</button>
+</div>
 <main>
   <section class="card" id="mirror">
     <div class="card-head">
@@ -105,6 +109,33 @@
     <h3>Secure connection</h3>
     <label class="check small"><input type="checkbox" id="httpsEnabled"> Offer HTTPS to phones (they install AirBridge's certificate once)</label>
     <p class="hint small" id="tlsInfo"></p>
+  </section>
+
+  <section class="card wide" id="castCard">
+    <div class="card-head">
+      <h2>Share PC screen to phone</h2>
+      <label class="switch"><input type="checkbox" id="castOn"><span></span></label>
+    </div>
+    <p class="hint">Reverse mirroring: watch this PC's screen in the phone page's <b>Screen</b> tab. With remote control on, tapping the picture clicks on the PC. Sharing always starts off when AirBridge starts.</p>
+    <p class="status"><span class="dot" id="castDot"></span><span id="castText">Off</span></p>
+    <div class="cols three">
+      <label>Screen
+        <select id="castDisplay"></select>
+      </label>
+      <label>PC sound
+        <select id="castAudio">
+          <option value="off">Don't send</option>
+          <option value="both">Play on PC and phone</option>
+          <option value="phone">Phone only (mute the PC)</option>
+        </select>
+      </label>
+      <label>Picture
+        <select id="castQuality">
+          <option value="sharp">Sharp (text, documents), 30 fps</option>
+          <option value="smooth">Smooth (video, games), 60 fps</option>
+        </select>
+      </label>
+    </div>
   </section>
 
   <section class="card wide" id="bridge">

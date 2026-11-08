@@ -26,6 +26,10 @@ const DEFAULTS = {
   httpsEnabled: true,
   caKeyEnc: '', // local CA private key (PEM), encrypted with safeStorage
   caCert: '', // local CA certificate (PEM)
+  // Sharing the PC screen to phones. Sharing itself is never saved as "on".
+  castAudio: 'off', // 'off' | 'both' (PC and phone) | 'phone' (phone only, PC muted)
+  castQuality: 'sharp', // 'sharp' (text) | 'smooth' (video, games)
+  castDisplay: '', // Electron display id; '' = main display
   h265: false,
   uploadsEnabled: true,
   uploadDir: path.join(os.homedir(), 'Downloads', 'AirBridge'),
@@ -34,6 +38,8 @@ const DEFAULTS = {
 };
 
 const AUDIO_MODES = ['pc', 'off', 'phone'];
+// Settings that only accept one of a fixed list of values.
+const ENUMS = { audioMode: AUDIO_MODES, castAudio: ['off', 'both', 'phone'], castQuality: ['sharp', 'smooth'] };
 
 class Settings {
   constructor(dir) {
@@ -62,10 +68,10 @@ class Settings {
     for (const [k, v] of Object.entries(patch)) {
       if (!(k in DEFAULTS)) continue;
       if (typeof v !== typeof DEFAULTS[k]) continue;
-      if (k === 'audioMode' && !AUDIO_MODES.includes(v)) continue;
+      if (ENUMS[k] && !ENUMS[k].includes(v)) continue;
       this.data[k] = v;
     }
-    if (!AUDIO_MODES.includes(this.data.audioMode)) this.data.audioMode = DEFAULTS.audioMode;
+    for (const [k, allowed] of Object.entries(ENUMS)) if (!allowed.includes(this.data[k])) this.data[k] = DEFAULTS[k];
     this.data.deviceName =String(this.data.deviceName).trim().slice(0, 60) || DEFAULTS.deviceName;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(this.data, null, 2));

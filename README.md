@@ -7,7 +7,10 @@ that needs nothing installed on the phone.
    Control Centre → *Screen Mirroring*, just like an Apple TV. You can choose where the
    sound goes (see below), take screenshots, record sessions to MP4, and add the mirror
    to OBS in one click.
-2. **Phone page from a QR code** (iPhone and Android, in the browser). You scan the code
+2. **Reverse mirroring: the PC screen on the phone.** Turn on **Share screen to phone**
+   and the phone page's **Screen** tab shows the PC's screen live. PC sound can come
+   along, and with remote control on, tapping the picture clicks on the PC.
+3. **Phone page from a QR code** (iPhone and Android, in the browser). You scan the code
    once: after that the phone is remembered and can live on its Home Screen like an app.
    HTTPS is optional:
    - **Send:** photos and files from the phone land in a folder on the PC.
@@ -68,6 +71,33 @@ On those systems the remote control and output picker aren't available.
   the picture goes to the PC. Handy when your headset is plugged into the PC. Tested
   on an iPhone (November 2026). This relies on undocumented iOS behaviour, so a future
   iOS update could change it. Start mirroring again after switching modes.
+
+### Sharing the PC screen to the phone (reverse mirroring)
+
+- **How it works:** a hidden window (`src/caster/`) captures the chosen display with
+  `getDisplayMedia`. The main process picks the screen through
+  `setDisplayMediaRequestHandler`, so no picker appears. It streams to each watching
+  phone over **WebRTC**, preferring H.264, which phones decode in hardware. The
+  phone page's existing WebSocket carries the setup messages (`cast-*`). The PC sends the
+  offer, and only well-formed answers and ICE candidates are relayed. It's LAN-only:
+  there are no STUN or TURN servers, and it uses real host addresses.
+- **Settings:**
+  - **Screen:** which monitor to share. It's captured at its native resolution, up to 4K.
+  - **PC sound:** don't send, play on the PC and the phone, or *phone only*. Phone
+    only mutes the PC while sharing, using Electron's `loopbackWithMute`.
+  - **Picture:** *Sharp* is 30 fps and keeps text crisp. *Smooth* is 60 fps and is
+    better for video and games.
+- **Phone:** open the **Screen** tab. **Sound on** is needed because browsers only play
+  audio after a tap. **Fill screen** shows the picture edge to edge (turn the phone
+  sideways). With **remote control** on, tap the picture to click at that spot,
+  two-finger tap to right-click, and drag two fingers to scroll. The tap is mapped to
+  the right monitor of a multi-monitor desktop (`src/pointer.js`).
+- **Privacy:** sharing is **always off** when AirBridge starts. While it's on, a red
+  banner in the app and the tray tooltip say so, and show how many phones are watching.
+  **Stop sharing** closes the capture immediately. Only paired phones, or phones with
+  the current QR link, can watch.
+- The installer's firewall rule for `AirBridge.exe` allows UDP as well as TCP
+  (Private networks only), because WebRTC needs UDP.
 
 ### Remembered phones and HTTPS
 

@@ -64,6 +64,10 @@ li .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-w
 li .row-actions { display: flex; gap: 8px; flex: none; }
 .ok { color: var(--ok); } .err { color: var(--err); }
 details label.check { margin: 8px 0; }
+.cols.three { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; }
+@media (max-width: 980px) { .cols.three { grid-template-columns: 1fr; } }
+.banner.sharing { border-color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
+.dot.sharing { background: var(--err); }
 .capture { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 4px; }
 .capture label.check { margin: 0; }
 code, .mono { font: 11px Consolas, monospace; word-break: break-all; }

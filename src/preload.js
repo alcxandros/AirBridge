@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('airbridge', {
   openLink: (u) => ipcRenderer.invoke('open-link', u),
   addToObs: (pw) => ipcRenderer.invoke('add-to-obs', pw),
   forgetDevice: (id) => ipcRenderer.invoke('forget-device', id),
+  cast: (on) => ipcRenderer.invoke('cast', on),
   screenshot: () => ipcRenderer.invoke('screenshot'),
   chooseRecordFolder: () => ipcRenderer.invoke('choose-record-folder'),
   openRecordFolder: () => ipcRenderer.invoke('open-record-folder'),

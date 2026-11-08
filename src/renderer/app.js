@@ -37,6 +37,7 @@ function render(s) {
   $('obsPassword').placeholder = st.hasObsPassword ? 'Saved password (leave empty to reuse)' : 'OBS WebSocket password (if set)';
   renderBridge(s);
   renderExtras(s);
+  renderCast(s);
   $('requirePin').checked = st.requirePin;
   $('fullscreen').checked = st.fullscreen;
   $('h265').checked = st.h265;
@@ -182,6 +183,36 @@ function renderExtras(s) {
       : 'Off. Phones use plain HTTP on your home network.';
 }
 
+function renderCast(s) {
+  const c = s.cast;
+  const st = s.settings;
+  $('castOn').checked = c.active || c.starting;
+  const watching = c.viewers ? `${c.viewers} phone${c.viewers > 1 ? 's' : ''} watching` : 'no phone watching yet';
+  $('castDot').className = 'dot ' + (c.active ? 'sharing' : c.starting ? 'starting' : c.error ? 'error' : '');
+  $('castText').textContent = c.error
+    ? c.error
+    : c.active
+      ? `Sharing ${c.width}×${c.height}, ${watching}. Open the Screen tab on the phone.`
+      : c.starting
+        ? 'Starting…'
+        : 'Off';
+  $('castBanner').classList.toggle('hidden', !c.active);
+  $('castBannerViewers').textContent = c.active ? `· ${watching}` : '';
+  const sel = $('castDisplay');
+  if (document.activeElement !== sel) {
+    sel.innerHTML = '';
+    for (const d of s.displays) {
+      const o = document.createElement('option');
+      o.value = d.id;
+      o.textContent = d.label;
+      o.selected = st.castDisplay ? d.id === st.castDisplay : d.primary;
+      sel.append(o);
+    }
+  }
+  $('castAudio').value = st.castAudio;
+  $('castQuality').value = st.castQuality;
+}
+
 const set = (patch) => api.updateSettings(patch).then(render);
 
 $('receiverEnabled').onchange = (e) => set({ receiverEnabled: e.target.checked });
@@ -230,6 +261,11 @@ $('recordSessions').onchange = (e) => {
 };
 $('chooseRecordDir').onclick = () => api.chooseRecordFolder().then(render);
 $('openRecordDir').onclick = () => api.openRecordFolder();
+$('castOn').onchange = (e) => api.cast(e.target.checked).then(render);
+$('castBannerStop').onclick = () => api.cast(false).then(render);
+$('castDisplay').onchange = (e) => set({ castDisplay: e.target.value });
+$('castAudio').onchange = (e) => set({ castAudio: e.target.value });
+$('castQuality').onchange = (e) => set({ castQuality: e.target.value });
 $('screenshot').onclick = async () => {
   const res = await api.screenshot();
   const msg = $('captureMsg');

@@ -1,6 +1,6 @@
 'use strict';
 const {
-  app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage, clipboard, safeStorage, Notification, desktopCapturer,
+  app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage, clipboard, safeStorage, Notification, desktopCapturer, screen,
 } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -15,6 +15,12 @@ const { Helper } = require('./helper');
 const { addMirrorToObs } = require('./obs');
 const tlsCa = require('./tls');
 const { lanAddresses, publicNetworks } = require('./netinfo');
+const { ScreenCaster } = require('./cast');
+const { tapToAbsolute, unionRect } = require('./pointer');
+
+// WebRTC to phones on the LAN: offer real host addresses instead of
+// randomised .local names, which some networks can't resolve.
+app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 
 // Development: AIRBRIDGE_PROFILE=<dir> runs a separate copy with its own
 // settings, so it can run next to an installed AirBridge.
@@ -46,6 +52,7 @@ let tlsInfo = { enabled: false, port: null, fingerprint: null, error: '' };
 let tlsIps = '';
 let caPem = null;
 let caKeyPem = null;
+let caster;
 let lastRecording = null;
 let lastScreenshot = null;
 const received = []; // files uploaded from the phone
@@ -109,6 +116,8 @@ async function snapshot() {
     canStartWithWindows: app.isPackaged && process.platform === 'win32',
     lastRecording,
     lastScreenshot,
+    cast: caster.state,
+    displays: ScreenCaster.displays(),
     audioOutputs,
     publicNetworks: publicNets,
     log: receiver.logTail.slice(-200),
@@ -257,6 +266,31 @@ async function takeScreenshot() {
   return { ok: true, file };
 }
 
+// ---- Sharing the PC screen to phones ----
+
+function castOptions() {
+  return { audio: settings.get('castAudio'), quality: settings.get('castQuality'), displayId: settings.get('castDisplay') };
+}
+
+function startCast() {
+  caster.start(castOptions());
+}
+
+function stopCast() {
+  caster.stop();
+}
+
+/** Tap on the shared picture -> move the real cursor there and click. */
+function clickAt({ x, y, b }) {
+  if (!caster.state.active || process.platform !== 'win32') return;
+  const phys = (d) => screen.dipToScreenRect(null, d.bounds);
+  const display = phys(caster.display());
+  const virtual = unionRect(screen.getAllDisplays().map(phys));
+  const [ax, ay] = tapToAbsolute({ x, y }, display, virtual);
+  helper.input(`a ${ax} ${ay}`);
+  helper.input(`c ${b}`);
+}
+
 // ---- Windows sign-in ----
 
 function applyStartWithWindows() {
@@ -321,7 +355,9 @@ const short = (s, n = 40) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 function buildTrayMenu() {
   if (!tray) return;
   const status = receiverStatusText();
-  tray.setToolTip(`AirBridge — ${status.replace('Mirroring: ', '')}`);
+  const cs = caster.state;
+  const castLabel = cs.active ? `Sharing screen to phone${cs.viewers ? ` (${cs.viewers} watching)` : ''}` : 'Share screen to phone';
+  tray.setToolTip(`AirBridge — ${status.replace('Mirroring: ', '')}${cs.active ? ' · sharing your screen' : ''}`);
   const recent = received.slice(0, 5);
   const texts = phoneTexts.slice(0, 5);
   const menu = Menu.buildFromTemplate([
@@ -340,6 +376,12 @@ function buildTrayMenu() {
       click: (item) => updateSettings({ recordSessions: item.checked }),
     },
     { type: 'separator' },
+    {
+      label: castLabel,
+      type: 'checkbox',
+      checked: cs.active || cs.starting,
+      click: (item) => (item.checked ? startCast() : stopCast()),
+    },
     { label: 'Send clipboard to phone', click: () => sendClipboardToPhone() },
     {
       label: 'Text from phone',
@@ -400,6 +442,8 @@ async function updateSettings(patch) {
   if (before.remoteEnabled && !after.remoteEnabled) helper.stopInput();
   if (before.startWithWindows !== after.startWithWindows) applyStartWithWindows();
   if (before.httpsEnabled !== after.httpsEnabled) await startPhoneServer();
+  // Changing what is shared restarts the capture; phones reconnect by themselves.
+  if (caster.state.active && ['castAudio', 'castQuality', 'castDisplay'].some((k) => before[k] !== after[k])) startCast();
 
   const receiverChanged = RECEIVER_KEYS.some((k) => before[k] !== after[k]);
   if (before.receiverEnabled !== after.receiverEnabled) {
@@ -425,7 +469,9 @@ app.whenReady().then(async () => {
   devices = new DeviceStore(settings);
   receiver = new Receiver({ resourcesPath, appRoot, dataDir });
   helper = new Helper({ resourcesPath, appRoot });
+  caster = new ScreenCaster();
   phone = new PhoneServer({
+    castActive: () => caster.state.active,
     getUploadDir: () => settings.get('uploadDir'),
     isEnabled: () => settings.get('uploadsEnabled'),
     remoteEnabled: () => settings.get('remoteEnabled') && helper.available(),
@@ -472,6 +518,22 @@ app.whenReady().then(async () => {
     pushState();
   });
   phone.on('input', (line) => helper.input(line));
+  phone.on('pointer', clickAt);
+  phone.on('cast', ({ client, type, data }) => {
+    if (type === 'join') caster.join(client);
+    else if (type === 'leave') caster.leave(client);
+    else if (type === 'signal') caster.signal(client, data);
+  });
+  caster.on('signal', (client, data) => phone.sendTo(client, { type: 'cast-signal', data }));
+  caster.on('log', (line) => receiver.log(`[screen share] ${line}`));
+  let wasActive = false;
+  caster.on('state', (s) => {
+    if (s.active !== wasActive) {
+      wasActive = s.active;
+      phone.broadcast(); // phones on the Screen tab start or stop watching
+    }
+    pushState();
+  });
   phone.on('clients', (n) => {
     phoneClients = n;
     if (n === 0) helper.stopInput();
@@ -497,6 +559,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', async (e) => {
   quitting = true;
   if (helper) helper.stopInput();
+  if (caster) caster.stop();
   if (receiver && receiver.proc) {
     e.preventDefault();
     await receiver.stop();
@@ -579,6 +642,13 @@ ipcMain.handle('open-link', (_e, url) => {
 
 // Screenshot
 ipcMain.handle('screenshot', () => takeScreenshot());
+
+// Share PC screen to phones
+ipcMain.handle('cast', (_e, on) => {
+  if (on) startCast();
+  else stopCast();
+  return snapshot();
+});
 
 // OBS
 ipcMain.handle('add-to-obs', async (_e, password) => {
