@@ -20,6 +20,7 @@ const DEFAULTS = {
   autoCopyClipboard: true,
   devices: [], // paired phones: { id, name, hash, created, lastSeen } (see devices.js)
   startWithWindows: false,
+  autoUpdate: true, // check GitHub Releases for new versions
   recordSessions: false,
   recordDir: path.join(os.homedir(), 'Videos', 'AirBridge'),
   screenshotDir: path.join(os.homedir(), 'Pictures', 'AirBridge'),

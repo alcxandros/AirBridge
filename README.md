@@ -180,9 +180,11 @@ Renderer`, set the capture method to *Windows 10 (1903 and up)*, and tick *Clien
 
 ## Use it
 
-1. Install `AirBridge Setup x.y.z.exe` from `dist/` (it asks for admin rights to add
-   the firewall rules). It isn't code-signed yet, so SmartScreen shows a warning:
-   choose *More info → Run anyway*.
+1. Download `AirBridge-Setup-x.y.z.exe` from the
+   [latest release](https://github.com/alcxandros/airbridge/releases/latest) and run it
+   (it asks for admin rights to add the firewall rules). It isn't code-signed yet, so
+   SmartScreen shows a warning: choose *More info → Run anyway*. After that, AirBridge
+   updates itself from GitHub Releases (turn this off under Screen mirroring).
 2. Keep the PC and phone on the same Wi-Fi, and set that network to **Private** in Windows.
 3. iPhone: Control Centre → Screen Mirroring → pick your PC. Close the app window to
    keep it running in the tray.

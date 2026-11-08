@@ -1,7 +1,7 @@
 {
   "name": "airbridge",
   "productName": "AirBridge",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Free, open-source AirPlay screen-mirroring receiver and phone/PC bridge (files, clipboard, links, remote) for Windows.",
   "main": "src/main.js",
   "license": "GPL-3.0-or-later",
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "busboy": "^1.6.0",
+    "electron-updater": "^6.8.11",
     "node-forge": "^1.4.3",
     "qrcode": "^1.5.4",
     "ws": "^8.22.1"
@@ -65,7 +66,19 @@
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "license": "LICENSE",
-      "include": "build/installer.nsh"
-    }
+      "include": "build/installer.nsh",
+      "artifactName": "AirBridge-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "alcxandros",
+        "repo": "airbridge"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alcxandros/airbridge.git"
   }
 }

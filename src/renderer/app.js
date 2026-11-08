@@ -20,6 +20,7 @@ function render(s) {
   accent = st.accent;
   applyAccent();
   $('version').textContent = 'v' + s.version;
+  renderUpdate(s);
   $('publicWarn').classList.toggle('hidden', !s.publicNetworks.length);
   $('publicNames').textContent = s.publicNetworks.join(', ');
 
@@ -227,6 +228,29 @@ function renderCast(s) {
 }
 
 const set = (patch) => api.updateSettings(patch).then(render);
+
+// ---- updates ----
+function renderUpdate(s) {
+  const u = s.update || { status: 'dev' };
+  $('autoUpdate').checked = s.settings.autoUpdate;
+  $('autoUpdate').disabled = u.status === 'dev';
+  $('checkUpdate').classList.toggle('hidden', u.status === 'dev' || ['checking', 'downloading', 'ready'].includes(u.status));
+  const when = u.checkedAt ? ` (checked ${new Date(u.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` : '';
+  $('updateText').textContent = {
+    dev: 'Updates work in the installed app.',
+    idle: `You have v${u.current}.`,
+    checking: 'Checking for updates…',
+    none: `v${u.current} is the latest version${when}.`,
+    downloading: `Downloading v${u.version}… ${u.progress || 0}%`,
+    ready: `v${u.version} is ready to install.`,
+    error: `Update check failed: ${u.error}`,
+  }[u.status] || '';
+  $('updateBanner').classList.toggle('hidden', u.status !== 'ready');
+  $('updateVersion').textContent = u.version || '';
+}
+$('autoUpdate').onchange = (e) => set({ autoUpdate: e.target.checked });
+$('checkUpdate').onclick = () => api.checkUpdate().then(render);
+$('installUpdate').onclick = () => api.installUpdate();
 
 // ---- appearance: theme (main process sets nativeTheme) and accent colour ----
 // [light, dark] shades; the same list is in web/phone.html.

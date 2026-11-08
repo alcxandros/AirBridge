@@ -24,6 +24,10 @@
   <span>Your network <b id="publicNames"></b> is set to <b>Public</b>, so Windows blocks iPhones from finding this computer. Switch it to <b>Private</b>.</span>
   <button class="ghost" id="fixNetwork">Open network settings</button>
 </div>
+<div class="banner hidden" id="updateBanner">
+  <span>⬆️ <b>AirBridge <span id="updateVersion"></span> is ready to install.</b> It takes a few seconds.</span>
+  <button class="ghost" id="installUpdate">Restart to update</button>
+</div>
 <div class="banner sharing hidden" id="castBanner">
   <span>🔴 <b>Your screen is being shared</b> <span id="castBannerViewers"></span></span>
   <button class="ghost" id="castBannerStop">Stop sharing</button>
@@ -58,6 +62,8 @@
       <label class="check"><input type="checkbox" id="h265"> Allow 4K / HEVC (needs a recent GPU)</label>
       <label class="check"><input type="checkbox" id="startWithWindows"> Start AirBridge when I sign in to Windows</label>
       <p class="hint small hidden" id="startHint">Available in the installed app.</p>
+      <label class="check"><input type="checkbox" id="autoUpdate"> Keep AirBridge up to date automatically</label>
+      <p class="hint small"><span id="updateText"></span> <button class="link" id="checkUpdate">Check now</button></p>
     </div>
 
     <div class="capture">

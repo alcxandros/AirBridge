@@ -19,6 +19,7 @@ const tlsCa = require('./tls');
 const { lanAddresses, publicNetworks } = require('./netinfo');
 const { ScreenCaster } = require('./cast');
 const { tapCommand } = require('./pointer');
+const { Updater } = require('./updater');
 
 // WebRTC to phones on the LAN: offer real host addresses instead of
 // randomised .local names, which some networks can't resolve.
@@ -39,6 +40,7 @@ const START_HIDDEN = process.argv.includes('--hidden');
 let win = null;
 let tray = null;
 let quitting = false;
+let updater = null;
 let settings;
 let devices;
 let receiver;
@@ -123,6 +125,7 @@ async function snapshot() {
     publicNetworks: publicNets,
     log: receiver.logTail.slice(-200),
     version: app.getVersion(),
+    update: updater ? updater.state : null,
   };
 }
 
@@ -478,6 +481,7 @@ async function updateSettings(patch) {
   if (before.remoteEnabled && !after.remoteEnabled) helper.stopInput();
   if (before.startWithWindows !== after.startWithWindows) applyStartWithWindows();
   if (before.theme !== after.theme) nativeTheme.themeSource = after.theme;
+  if (before.autoUpdate !== after.autoUpdate) updater.setAuto(after.autoUpdate);
   if (before.httpsEnabled !== after.httpsEnabled) await startPhoneServer();
   // Changing what is shared restarts the capture; phones reconnect by themselves.
   if (caster.state.active && ['castAudio', 'castQuality', 'castDisplay'].some((k) => before[k] !== after[k])) startCast();
@@ -597,6 +601,11 @@ app.whenReady().then(async () => {
   });
   // Notice IP changes (new Wi-Fi) even while the window stays hidden.
   setInterval(refreshTlsCert, 60000).unref();
+
+  updater = new Updater({ packaged: app.isPackaged, currentVersion: app.getVersion() });
+  updater.on('state', pushState);
+  updater.on('ready', (version) => notify(`AirBridge ${version} is ready`, 'Click to restart and update now, or it installs when you quit.', () => updater.install(), { always: true }));
+  updater.setAuto(settings.get('autoUpdate'));
 });
 
 app.on('before-quit', async (e) => {
@@ -613,6 +622,14 @@ app.on('before-quit', async (e) => {
 // ---- IPC from the renderer ----
 
 ipcMain.handle('get-state', () => snapshot());
+ipcMain.handle('check-update', async () => {
+  await updater.check();
+  return snapshot();
+});
+ipcMain.handle('install-update', () => {
+  quitting = true;
+  updater.install();
+});
 ipcMain.handle('update-settings', (_e, patch) => updateSettings({ ...patch }));
 
 ipcMain.handle('new-pin', async () => {
