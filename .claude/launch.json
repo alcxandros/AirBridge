@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "upload-page",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev-upload.js"],
+      "port": 8799
+    }
+  ]
+}

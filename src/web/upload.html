@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Send to __DEVICE__</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --fg:#14161a; --muted:#5d6470; --accent:#2f6fec; --ok:#1f8a4c; --err:#c23a3a; --line:#e3e6eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --card:#191c22; --fg:#eef0f3; --muted:#9aa2ae; --accent:#5b8ff5; --ok:#4cc483; --err:#f07070; --line:#2a2f37; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:520px; margin:0 auto; padding:24px 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:22px; margin:8px 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .pick { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:32px 16px; border:2px dashed var(--line); border-radius:16px; background:var(--card); cursor:pointer; text-align:center; }
+  .pick strong { font-size:18px; color:var(--accent); }
+  .pick span { color:var(--muted); font-size:14px; }
+  input[type=file] { display:none; }
+  button { width:100%; margin-top:16px; padding:14px; font:inherit; font-weight:600; border:0; border-radius:12px; background:var(--accent); color:#fff; }
+  button:disabled { opacity:.45; }
+  ul { list-style:none; margin:20px 0 0; padding:0; display:flex; flex-direction:column; gap:10px; }
+  li { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .row { display:flex; justify-content:space-between; gap:12px; font-size:14px; }
+  .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .state { color:var(--muted); flex:none; }
+  .state.ok { color:var(--ok); } .state.err { color:var(--err); }
+  progress { width:100%; height:6px; margin-top:8px; accent-color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Send files to __DEVICE__</h1>
+  <p class="sub">Files are saved straight into the folder chosen on the computer.</p>
+
+  <label class="pick" for="files">
+    <strong>Choose photos or files</strong>
+    <span>You can pick several at once</span>
+  </label>
+  <input id="files" type="file" multiple>
+  <button id="send" disabled>Send</button>
+
+  <ul id="list"></ul>
+</main>
+<script>
+  const input = document.getElementById('files');
+  const sendBtn = document.getElementById('send');
+  const list = document.getElementById('list');
+  const token = new URLSearchParams(location.search).get('t') || '';
+
+  const fmt = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
+
+  input.addEventListener('change', () => { sendBtn.disabled = !input.files.length; });
+
+  function row(file) {
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="row"><span class="name"></span><span class="state">Waiting</span></div><progress max="1" value="0"></progress>';
+    li.querySelector('.name').textContent = file.name + ' · ' + fmt(file.size);
+    list.prepend(li);
+    return { state: li.querySelector('.state'), bar: li.querySelector('progress') };
+  }
+
+  // One request per file so a single failure doesn't lose the rest.
+  function upload(file, ui) {
+    return new Promise((resolve) => {
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload?t=' + encodeURIComponent(token));
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) { ui.bar.value = e.loaded / e.total; ui.state.textContent = Math.round(100 * e.loaded / e.total) + '%'; } };
+      xhr.onload = () => {
+        let msg = '';
+        try { msg = JSON.parse(xhr.responseText).error || ''; } catch { msg = xhr.responseText; }
+        if (xhr.status === 200) { ui.state.textContent = 'Sent'; ui.state.className = 'state ok'; ui.bar.value = 1; }
+        else { ui.state.textContent = msg || ('Failed (' + xhr.status + ')'); ui.state.className = 'state err'; }
+        resolve();
+      };
+      xhr.onerror = () => { ui.state.textContent = 'Connection lost'; ui.state.className = 'state err'; resolve(); };
+      xhr.send(fd);
+    });
+  }
+
+  sendBtn.addEventListener('click', async () => {
+    const files = Array.from(input.files);
+    input.value = '';
+    sendBtn.disabled = true;
+    const jobs = files.map((f) => [f, row(f)]);
+    for (const [f, ui] of jobs) { ui.state.textContent = 'Sending'; await upload(f, ui); }
+  });
+</script>
+</body>
+</html>

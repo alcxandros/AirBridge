@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+<title>AirBridge</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div class="brand"><img src="icon.png" alt=""><span>AirBridge</span></div>
+  <span class="version" id="version"></span>
+</header>
+
+<div class="banner hidden" id="publicWarn">
+  <span>Your network <b id="publicNames"></b> is set to <b>Public</b>, so Windows blocks iPhones from finding this computer. Switch it to <b>Private</b>.</span>
+  <button class="ghost" id="fixNetwork">Open network settings</button>
+</div>
+<main>
+  <section class="card" id="mirror">
+    <div class="card-head">
+      <h2>Screen mirroring</h2>
+      <label class="switch"><input type="checkbox" id="receiverEnabled"><span></span></label>
+    </div>
+    <p class="status"><span class="dot" id="rxDot"></span><span id="rxText">Starting…</span></p>
+    <p class="hint" id="rxHint">On your iPhone or iPad, open Control Centre → <b>Screen Mirroring</b> and pick <b id="nameEcho"></b>.</p>
+    <p class="pin hidden" id="pinRow">PIN: <b id="pinValue"></b> <button class="link" id="newPin">New PIN</button></p>
+
+    <div class="fields">
+      <label>Name shown on iPhone
+        <input id="deviceName" maxlength="60">
+      </label>
+      <label class="check"><input type="checkbox" id="requirePin"> Ask for a PIN before mirroring</label>
+      <label class="check"><input type="checkbox" id="fullscreen"> Open mirrored screen full-screen</label>
+      <label class="check"><input type="checkbox" id="h265"> Allow 4K / HEVC (needs a recent GPU)</label>
+    </div>
+
+    <details>
+      <summary>Log</summary>
+      <pre id="log"></pre>
+      <button class="ghost" id="restart">Restart receiver</button>
+    </details>
+  </section>
+
+  <section class="card" id="files">
+    <div class="card-head">
+      <h2>Receive files from phone</h2>
+      <label class="switch"><input type="checkbox" id="uploadsEnabled"><span></span></label>
+    </div>
+    <div class="qr-wrap">
+      <img id="qr" alt="QR code for the upload page">
+      <div>
+        <p>Scan with the phone's camera, then pick photos or files to send. The phone must be on the same Wi-Fi.</p>
+        <p class="url" id="url"></p>
+        <label class="small">Network
+          <select id="address"></select>
+        </label>
+        <button class="link" id="newLink">New link (stops old one working)</button>
+        <p class="warn hidden" id="uploadError"></p>
+      </div>
+    </div>
+    <div class="folder">
+      <span>Saving to <b id="uploadDir"></b></span>
+      <span class="actions"><button class="ghost" id="chooseFolder">Change…</button><button class="ghost" id="openFolder">Open</button></span>
+    </div>
+    <h3>Received</h3>
+    <ul id="received"><li class="empty">Nothing yet.</li></ul>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
