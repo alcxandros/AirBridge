@@ -12,6 +12,11 @@ header { display: flex; align-items: center; justify-content: space-between; pad
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; }
 .brand img { width: 26px; height: 26px; }
 .version { color: var(--muted); font-size: 12px; }
+.appearance { display: flex; align-items: center; gap: 12px; }
+.appearance select { padding: 4px 8px; font-size: 13px; }
+.swatches { display: flex; gap: 6px; }
+.swatches button { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--card); padding: 0; box-shadow: 0 0 0 1px var(--line); }
+.swatches button.on { box-shadow: 0 0 0 2px var(--fg); }
 main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 20px 20px; }
 @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; min-width: 0; }

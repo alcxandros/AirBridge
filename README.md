@@ -22,6 +22,13 @@ that needs nothing installed on the phone.
    - **Clipboard & links:** text from the phone is copied on the PC, you can push the
      PC's clipboard to the phone, and a link from the phone opens in the PC's browser.
    A dot on Files or Clipboard & links means something new arrived from the PC.
+   **Away from home:** with [Tailscale](https://tailscale.com) on the PC and phone, pick the
+   Tailscale address in AirBridge and it works from anywhere.
+4. **PC power from the phone:** lock, sleep, restart or shut down (restart and shut down
+   wait 20 seconds and can be cancelled). Needs remote control.
+5. **Looks:** light, dark or system theme and five accent colours on the PC; the phone page
+   follows them, and each phone can override the theme and set trackpad speed and scroll
+   direction (gear icon).
 
 Windows 10/11 (x64) is the main target. The app shell also runs on macOS and Linux
 if `uxplay` is installed there (for example `brew install uxplay` or `apt install uxplay`).

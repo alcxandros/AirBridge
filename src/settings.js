@@ -30,6 +30,8 @@ const DEFAULTS = {
   castAudio: 'off', // 'off' | 'both' (PC and phone) | 'phone' (phone only, PC muted)
   castQuality: 'sharp', // 'sharp' (text) | 'smooth' (video, games)
   castDisplay: '', // Electron display id; '' = main display
+  theme: 'system', // 'system' | 'light' | 'dark' (PC app; also the phone page's default)
+  accent: 'blue', // accent colour, see ACCENTS in renderer/app.js and web/phone.html
   phoneAddress: '', // address in the QR code; '' = best local network address
   h265: false,
   uploadsEnabled: true,
@@ -40,7 +42,7 @@ const DEFAULTS = {
 
 const AUDIO_MODES = ['pc', 'off', 'phone'];
 // Settings that only accept one of a fixed list of values.
-const ENUMS = { audioMode: AUDIO_MODES, castAudio: ['off', 'both', 'phone'], castQuality: ['sharp', 'smooth'] };
+const ENUMS = { theme: ['system', 'light', 'dark'], accent: ['blue', 'purple', 'teal', 'orange', 'pink'], audioMode: AUDIO_MODES, castAudio: ['off', 'both', 'phone'], castQuality: ['sharp', 'smooth'] };
 
 class Settings {
   constructor(dir) {

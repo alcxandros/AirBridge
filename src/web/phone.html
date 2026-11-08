@@ -13,11 +13,18 @@
 <title>__DEVICE__ · AirBridge</title>
 <style>
   :root { --bg:#f5f6f8; --card:#fff; --fg:#14161a; --muted:#5d6470; --accent:#2f6fec; --ok:#1f8a4c; --err:#c23a3a; --line:#e3e6eb; --pad:#e9ecf1; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --card:#191c22; --fg:#eef0f3; --muted:#9aa2ae; --accent:#5b8ff5; --ok:#4cc483; --err:#f07070; --line:#2a2f37; --pad:#22262e; } }
+  /* Dark follows the phone unless this phone (or the PC) picked light or dark. */
+  @media (prefers-color-scheme: dark) { :root:not([data-theme=light]) { --bg:#0f1115; --card:#191c22; --fg:#eef0f3; --muted:#9aa2ae; --accent:#5b8ff5; --ok:#4cc483; --err:#f07070; --line:#2a2f37; --pad:#22262e; } }
+  :root[data-theme=dark] { --bg:#0f1115; --card:#191c22; --fg:#eef0f3; --muted:#9aa2ae; --accent:#5b8ff5; --ok:#4cc483; --err:#f07070; --line:#2a2f37; --pad:#22262e; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
   body { margin:0; font:16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--fg); display:flex; flex-direction:column; }
-  header { padding: calc(14px + env(safe-area-inset-top)) 16px 8px; }
+  header { padding: calc(14px + env(safe-area-inset-top)) 16px 8px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  #prefsBtn { border:0; background:none; color:var(--muted); padding:4px; margin:-2px -4px 0 0; }
+  #prefsBtn svg { width:22px; height:22px; display:block; }
+  .pref { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px; }
+  .pref select { font:inherit; font-size:14px; padding:6px 8px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
+  .pref input[type=checkbox] { width:22px; height:22px; accent-color:var(--accent); }
   header h1 { font-size:18px; margin:0; }
   header p { margin:2px 0 0; color:var(--muted); font-size:13px; }
   header p.off { color:var(--err); }
@@ -96,8 +103,11 @@
 </head>
 <body>
 <header>
-  <h1>__DEVICE__</h1>
-  <p id="conn">Connecting…</p>
+  <div>
+    <h1>__DEVICE__</h1>
+    <p id="conn">Connecting…</p>
+  </div>
+  <button id="prefsBtn" aria-label="Settings on this phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
 
 <main>
@@ -194,6 +204,31 @@
     </div>
   </section>
 
+  <section id="tab-prefs">
+    <h2>Settings on this phone</h2>
+    <label class="pref">Theme
+      <select id="prefTheme">
+        <option value="pc">Same as the PC</option>
+        <option value="system">Same as this phone</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+    <label class="pref">Trackpad speed
+      <select id="prefSpeed">
+        <option value="0.6">Slow</option>
+        <option value="1">Normal</option>
+        <option value="1.6">Fast</option>
+        <option value="2.3">Very fast</option>
+      </select>
+    </label>
+    <label class="pref">Natural scrolling (content follows your fingers)
+      <input type="checkbox" id="prefNatural">
+    </label>
+    <p class="muted small">The accent colour is chosen in AirBridge on the PC.</p>
+    <button class="primary" id="prefsDone">Done</button>
+  </section>
+
   <section id="tab-clip">
     <h2>Send text to the computer</h2>
     <textarea id="clipOut" placeholder="Paste or type here. It's copied to the computer's clipboard."></textarea>
@@ -233,6 +268,42 @@
   };
   const fmt = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
   let state = { shared: [], clip: null, remote: false, uploads: true };
+
+  // ---- settings on this phone (theme override, trackpad speed, scrolling) ----
+  // [light, dark] accent shades; the same list is in renderer/app.js on the PC.
+  const ACCENTS = { blue: ['#2f6fec', '#5b8ff5'], purple: ['#7a4fe0', '#a585f5'], teal: ['#0e8a87', '#35c2bd'], orange: ['#c8620f', '#f29a4a'], pink: ['#c9346f', '#f07ab0'] };
+  const prefs = { theme: 'pc', speed: 1, natural: true };
+  try { Object.assign(prefs, JSON.parse(store.get('airbridge-prefs') || '{}')); } catch {}
+  prefs.speed = Number(prefs.speed) || 1;
+  const savePrefs = () => store.set('airbridge-prefs', JSON.stringify(prefs));
+  const scrollSign = () => (prefs.natural ? 1 : -1);
+  const phoneDark = matchMedia('(prefers-color-scheme: dark)');
+  function applyLook() {
+    const look = state.appearance || { theme: 'system', accent: 'blue' };
+    const theme = prefs.theme === 'pc' ? look.theme : prefs.theme;
+    const root = document.documentElement;
+    if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+    else delete root.dataset.theme;
+    const dark = theme === 'dark' || (theme !== 'light' && phoneDark.matches);
+    root.style.colorScheme = dark ? 'dark' : 'light';
+    const [light, darkShade] = ACCENTS[look.accent] || ACCENTS.blue;
+    root.style.setProperty('--accent', dark ? darkShade : light);
+  }
+  phoneDark.addEventListener('change', applyLook);
+  applyLook();
+  $('prefTheme').value = prefs.theme;
+  $('prefSpeed').value = String(prefs.speed);
+  $('prefNatural').checked = prefs.natural;
+  $('prefTheme').onchange = (e) => { prefs.theme = e.target.value; savePrefs(); applyLook(); };
+  $('prefSpeed').onchange = (e) => { prefs.speed = Number(e.target.value) || 1; savePrefs(); };
+  $('prefNatural').onchange = (e) => { prefs.natural = e.target.checked; savePrefs(); };
+  let tabBeforePrefs = 'files';
+  $('prefsBtn').onclick = () => {
+    if ($('tab-prefs').classList.contains('on')) return showTab(tabBeforePrefs);
+    tabBeforePrefs = currentTab() || 'files';
+    showTab('prefs');
+  };
+  $('prefsDone').onclick = () => showTab(tabBeforePrefs);
 
   // ---- tabs ----
   // Dots on the tab bar for things that arrived while looking elsewhere.
@@ -281,6 +352,7 @@
 
   function render(s) {
     state = s;
+    applyLook();
     $('uploadsOff').classList.toggle('hidden', s.uploads);
     $('remoteOff').classList.toggle('hidden', s.remote);
     $('remoteOn').classList.toggle('hidden', !s.remote);
@@ -407,7 +479,7 @@
   };
   const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
   // Pointer acceleration: slow moves are precise, fast flicks cover the screen.
-  const accel = (d) => d * (1.4 + Math.min(Math.abs(d), 40) * 0.12);
+  const accel = (d) => d * (1.4 + Math.min(Math.abs(d), 40) * 0.12) * prefs.speed;
   const centroid = (list) => { let x = 0, y = 0; for (const t of list) { x += t.clientX; y += t.clientY; } return { x: x / list.length, y: y / list.length }; };
   pad.addEventListener('touchstart', (e) => {
     e.preventDefault();
@@ -422,7 +494,7 @@
     last = c;
     moved += Math.abs(dx) + Math.abs(dy);
     // Two fingers scroll (content follows the fingers, like on the phone).
-    if (e.touches.length >= 2) acc.w += dy * 4;
+    if (e.touches.length >= 2) acc.w += dy * 4 * scrollSign();
     else if (maxFingers < 2) { acc.dx += accel(dx); acc.dy += accel(dy); }
     schedule();
   }, { passive: false });
@@ -660,7 +732,7 @@
         view.s = s;
         applyView();
       } else if (g.mode === 'scroll') {
-        acc.w += (c.y - g.last.y) * 4;
+        acc.w += (c.y - g.last.y) * 4 * scrollSign();
         schedule();
       }
       g.last = c;

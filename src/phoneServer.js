@@ -280,6 +280,8 @@ class PhoneServer extends EventEmitter {
       uploads: !!this.opts.isEnabled(),
       remote: !!this.opts.remoteEnabled(),
       cast: !!this.opts.castActive(),
+      // Colours chosen on the PC (each phone can override the theme).
+      appearance: this.opts.appearance ? this.opts.appearance() : null,
       // While sharing: the PC's monitors, so the phone can switch between them.
       screens: this.opts.castActive() ? this.opts.castScreens() : null,
       shared: this.opts.getShared().map(({ id, name, size }) => ({ id, name, size })),

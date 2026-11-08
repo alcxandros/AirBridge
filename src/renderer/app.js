@@ -16,6 +16,9 @@ const fmtBytes = (n) => (n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : n < 10737
 function render(s) {
   state = s;
   const st = s.settings;
+  $('theme').value = st.theme;
+  accent = st.accent;
+  applyAccent();
   $('version').textContent = 'v' + s.version;
   $('publicWarn').classList.toggle('hidden', !s.publicNetworks.length);
   $('publicNames').textContent = s.publicNetworks.join(', ');
@@ -224,6 +227,31 @@ function renderCast(s) {
 }
 
 const set = (patch) => api.updateSettings(patch).then(render);
+
+// ---- appearance: theme (main process sets nativeTheme) and accent colour ----
+// [light, dark] shades; the same list is in web/phone.html.
+const ACCENTS = { blue: ['#2f6fec', '#5b8ff5'], purple: ['#7a4fe0', '#a585f5'], teal: ['#0e8a87', '#35c2bd'], orange: ['#c8620f', '#f29a4a'], pink: ['#c9346f', '#f07ab0'] };
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+let accent = 'blue';
+function applyAccent() {
+  const [light, dark] = ACCENTS[accent] || ACCENTS.blue;
+  document.documentElement.style.setProperty('--accent', darkQuery.matches ? dark : light);
+  for (const b of $('accents').children) {
+    b.classList.toggle('on', b.dataset.accent === accent);
+    b.setAttribute('aria-checked', String(b.dataset.accent === accent));
+  }
+}
+darkQuery.addEventListener('change', applyAccent);
+for (const [name, [light]] of Object.entries(ACCENTS)) {
+  const b = document.createElement('button');
+  b.dataset.accent = name;
+  b.title = name[0].toUpperCase() + name.slice(1);
+  b.setAttribute('role', 'radio');
+  b.style.background = light;
+  b.onclick = () => set({ accent: name });
+  $('accents').append(b);
+}
+$('theme').onchange = (e) => set({ theme: e.target.value });
 
 $('receiverEnabled').onchange = (e) => set({ receiverEnabled: e.target.checked });
 $('audioMode').onchange = (e) => set({ audioMode: e.target.value });

@@ -1,6 +1,7 @@
 'use strict';
 const {
   app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage, clipboard, safeStorage, Notification, desktopCapturer, screen,
+  nativeTheme,
 } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -476,6 +477,7 @@ async function updateSettings(patch) {
   phone.opts.deviceName = after.deviceName;
   if (before.remoteEnabled && !after.remoteEnabled) helper.stopInput();
   if (before.startWithWindows !== after.startWithWindows) applyStartWithWindows();
+  if (before.theme !== after.theme) nativeTheme.themeSource = after.theme;
   if (before.httpsEnabled !== after.httpsEnabled) await startPhoneServer();
   // Changing what is shared restarts the capture; phones reconnect by themselves.
   if (caster.state.active && ['castAudio', 'castQuality', 'castDisplay'].some((k) => before[k] !== after[k])) startCast();
@@ -501,12 +503,15 @@ app.whenReady().then(async () => {
   const resourcesPath = app.isPackaged ? process.resourcesPath : null;
   const appRoot = path.join(__dirname, '..');
   settings = new Settings(dataDir);
+  // Light / dark: also switches the window frame and the page's prefers-color-scheme.
+  nativeTheme.themeSource = settings.get('theme');
   devices = new DeviceStore(settings);
   receiver = new Receiver({ resourcesPath, appRoot, dataDir });
   helper = new Helper({ resourcesPath, appRoot });
   caster = new ScreenCaster({ helperExe: helper.exe });
   phone = new PhoneServer({
     castActive: () => caster.state.active,
+    appearance: () => ({ theme: settings.get('theme'), accent: settings.get('accent') }),
     castScreens: () => ({ list: ScreenCaster.displays().map(({ id, label }) => ({ id, label })), current: String(caster.display().id) }),
     getUploadDir: () => settings.get('uploadDir'),
     isEnabled: () => settings.get('uploadsEnabled'),
