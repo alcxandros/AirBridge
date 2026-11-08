@@ -479,12 +479,12 @@ test('Tailscale addresses are offered after real LAN adapters, before other virt
   const list = lanAddresses({
     'vEthernet (WSL)': [v4('172.20.0.1')],
     Tailscale: [v4('100.90.1.2')],
-    'Ethernet 2': [v4('192.168.1.136')],
+    'Ethernet 2': [v4('192.168.1.50')],
     Public: [v4('8.8.8.8')],
     Loopback: [{ family: 'IPv4', internal: true, address: '127.0.0.1' }],
   });
   assert.deepEqual(list.map((a) => [a.address, a.name, a.tailscale]), [
-    ['192.168.1.136', 'Ethernet 2', false],
+    ['192.168.1.50', 'Ethernet 2', false],
     ['100.90.1.2', 'Tailscale', true],
     ['172.20.0.1', 'vEthernet (WSL)', false],
   ]);
