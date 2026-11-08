@@ -1,29 +1,22 @@
 'use strict';
-// Maps a tap on the shared-screen video (fractions of the picture) to the
-// helper's absolute coordinates: 0..65535 across the whole virtual desktop
-// (all monitors), in physical pixels.
+// Maps a tap on the shared-screen video (fractions of the picture) to a helper
+// "p" command. The helper is DPI-aware and resolves the monitor itself (from a
+// point inside it), so the click lands on the right physical pixel even when
+// monitors use different Windows scaling.
 
-/** Union of rectangles {x, y, width, height}. */
-function unionRect(rects) {
-  const x0 = Math.min(...rects.map((r) => r.x));
-  const y0 = Math.min(...rects.map((r) => r.y));
-  const x1 = Math.max(...rects.map((r) => r.x + r.width));
-  const y1 = Math.max(...rects.map((r) => r.y + r.height));
-  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
-}
+const clamp01 = (v) => Math.min(Math.max(Number(v) || 0, 0), 1);
 
 /**
- * @param {{x:number,y:number}} tap       fractions 0..1 of the shared picture
- * @param {{x,y,width,height}} display    shared display, physical pixels
- * @param {{x,y,width,height}} virtual    whole virtual desktop, physical pixels
- * @returns {[number, number]}            helper "a" command coordinates
+ * @param {{x:number,y:number}} tap     fractions 0..1 of the shared picture
+ * @param {{x,y,width,height}} display  shared display, physical pixels (approximate is fine)
+ * @returns {string}                    "p <fx> <fy> <hintX> <hintY>"
  */
-function tapToAbsolute(tap, display, virtual) {
-  const px = display.x + Math.min(Math.max(tap.x, 0), 1) * (display.width - 1);
-  const py = display.y + Math.min(Math.max(tap.y, 0), 1) * (display.height - 1);
-  const ax = Math.round(((px - virtual.x) * 65535) / Math.max(virtual.width - 1, 1));
-  const ay = Math.round(((py - virtual.y) * 65535) / Math.max(virtual.height - 1, 1));
-  return [Math.min(Math.max(ax, 0), 65535), Math.min(Math.max(ay, 0), 65535)];
+function tapCommand(tap, display) {
+  // The display's centre: always inside the right monitor, even if Electron's
+  // DIP->physical conversion is off by a pixel or two at the edges.
+  const hx = Math.round(display.x + display.width / 2);
+  const hy = Math.round(display.y + display.height / 2);
+  return `p ${clamp01(tap.x).toFixed(5)} ${clamp01(tap.y).toFixed(5)} ${hx} ${hy}`;
 }
 
-module.exports = { tapToAbsolute, unionRect };
+module.exports = { tapCommand };

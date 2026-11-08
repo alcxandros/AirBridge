@@ -16,7 +16,7 @@ const { addMirrorToObs } = require('./obs');
 const tlsCa = require('./tls');
 const { lanAddresses, publicNetworks } = require('./netinfo');
 const { ScreenCaster } = require('./cast');
-const { tapToAbsolute, unionRect } = require('./pointer');
+const { tapCommand } = require('./pointer');
 
 // WebRTC to phones on the LAN: offer real host addresses instead of
 // randomised .local names, which some networks can't resolve.
@@ -283,11 +283,7 @@ function stopCast() {
 /** Tap on the shared picture -> move the real cursor there and click. */
 function clickAt({ x, y, b }) {
   if (!caster.state.active || process.platform !== 'win32') return;
-  const phys = (d) => screen.dipToScreenRect(null, d.bounds);
-  const display = phys(caster.display());
-  const virtual = unionRect(screen.getAllDisplays().map(phys));
-  const [ax, ay] = tapToAbsolute({ x, y }, display, virtual);
-  helper.input(`a ${ax} ${ay}`);
+  helper.input(tapCommand({ x, y }, screen.dipToScreenRect(null, caster.display().bounds)));
   helper.input(`c ${b}`);
 }
 

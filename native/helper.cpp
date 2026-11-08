@@ -8,6 +8,8 @@
 //   airbridge-helper input     read input commands from stdin, one per line:
 //       m <dx> <dy>            relative mouse move
 //       a <x> <y>              absolute move on the virtual desktop (0..65535 each)
+//       p <fx> <fy> <hx> <hy>  move to fraction fx,fy (0..1) of the monitor containing
+//                              physical point hx,hy (used for taps on the shared screen)
 //       d <l|r|m> / u <l|r|m>  button down / up
 //       c <l|r|m>              click
 //       w <n> / h <n>          vertical / horizontal wheel (120 = one notch)
@@ -143,6 +145,10 @@ static const struct { const char *name; WORD vk; } KEYS[] = {
 };
 
 static int inputLoop() {
+  // Work in physical pixels. Without this, Windows maps positions through a
+  // scaled "virtual" desktop when monitors use different scaling, and taps
+  // from the phone land in the wrong place.
+  SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   char line[8192];
   while (fgets(line, sizeof line, stdin)) {
     size_t len = strlen(line);
@@ -161,6 +167,22 @@ static int inputLoop() {
         long x = 0, y = 0;
         if (sscanf(arg, "%ld %ld", &x, &y) == 2 && x >= 0 && x <= 65535 && y >= 0 && y <= 65535)
           mouseFlags(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, 0, x, y);
+        break;
+      }
+      case 'p': {
+        // Fraction of a monitor (found from a point inside it) -> physical pixel.
+        double fx = 0, fy = 0;
+        long hx = 0, hy = 0;
+        if (sscanf(arg, "%lf %lf %ld %ld", &fx, &fy, &hx, &hy) != 4) break;
+        fx = fx < 0 ? 0 : fx > 1 ? 1 : fx;
+        fy = fy < 0 ? 0 : fy > 1 ? 1 : fy;
+        MONITORINFO mi = {sizeof mi};
+        if (!GetMonitorInfoW(MonitorFromPoint({hx, hy}, MONITOR_DEFAULTTONEAREST), &mi)) break;
+        const RECT &r = mi.rcMonitor;
+        int x = r.left + (int)(fx * (r.right - r.left - 1) + 0.5);
+        int y = r.top + (int)(fy * (r.bottom - r.top - 1) + 0.5);
+        if (!SetCursorPos(x, y)) fprintf(stderr, "SetCursorPos failed: %lu\n", GetLastError());
+        else if (getenv("AIRBRIDGE_HELPER_VERBOSE")) fprintf(stderr, "cursor %d %d\n", x, y);
         break;
       }
       case 'd': mouseFlags(buttonFlag(arg[0], true)); break;

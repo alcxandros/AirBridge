@@ -393,7 +393,7 @@ test('buildArgs: recording prefix uses forward slashes', () => {
 
 // ---- sharing the PC screen to the phone ----
 const { castSignal, pointerMsg } = require('../src/phoneServer');
-const { tapToAbsolute, unionRect } = require('../src/pointer');
+const { tapCommand } = require('../src/pointer');
 
 test('castSignal keeps only well-formed answers and ICE candidates', () => {
   assert.deepEqual(castSignal({ sdp: { type: 'answer', sdp: 'v=0', extra: 1 } }), { sdp: { type: 'answer', sdp: 'v=0' } });
@@ -413,19 +413,11 @@ test('pointerMsg validates taps', () => {
   assert.equal(pointerMsg({ x: 'a', y: 0.5 }), null);
 });
 
-test('tapToAbsolute maps taps across multi-monitor desktops', () => {
-  const left = { x: 0, y: 0, width: 1920, height: 1080 };
-  const right = { x: 1920, y: -200, width: 2560, height: 1440 };
-  const virt = unionRect([left, right]);
-  assert.deepEqual(virt, { x: 0, y: -200, width: 4480, height: 1440 });
-  // Top-left of the right-hand monitor.
-  const [ax, ay] = tapToAbsolute({ x: 0, y: 0 }, right, virt);
-  assert.equal(ax, Math.round((1920 * 65535) / 4479));
-  assert.equal(ay, 0);
-  // Bottom-right corner of the whole desktop.
-  assert.deepEqual(tapToAbsolute({ x: 1, y: 1 }, right, virt), [65535, 65535]);
-  // Centre of a single-monitor desktop.
-  assert.deepEqual(tapToAbsolute({ x: 0.5, y: 0.5 }, left, left), [32768, 32768]);
+test('tapCommand sends the tap fraction plus a point inside the shared monitor', () => {
+  // A 150%-scaled monitor right of the main one (Electron's rect is ~2px too wide).
+  const right = { x: 2368, y: 252, width: 1922, height: 1080 };
+  assert.equal(tapCommand({ x: 0.25, y: 0.5 }, right), 'p 0.25000 0.50000 3329 792');
+  assert.equal(tapCommand({ x: -1, y: 2 }, { x: 0, y: 0, width: 100, height: 50 }), 'p 0.00000 1.00000 50 25');
 });
 
 test('screen-share signaling only flows while sharing is on; taps need remote control', async () => {

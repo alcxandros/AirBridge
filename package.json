@@ -1,7 +1,7 @@
 {
   "name": "airbridge",
   "productName": "AirBridge",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Free, open-source AirPlay screen-mirroring receiver and phone/PC bridge (files, clipboard, links, remote) for Windows.",
   "main": "src/main.js",
   "license": "GPL-3.0-or-later",
