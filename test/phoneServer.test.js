@@ -407,8 +407,10 @@ test('castSignal keeps only well-formed answers and ICE candidates', () => {
 });
 
 test('pointerMsg validates taps', () => {
-  assert.deepEqual(pointerMsg({ x: 0.5, y: 0.25, b: 'r' }), { x: 0.5, y: 0.25, b: 'r' });
-  assert.deepEqual(pointerMsg({ x: 0, y: 1 }), { x: 0, y: 1, b: 'l' });
+  assert.deepEqual(pointerMsg({ x: 0.5, y: 0.25, b: 'r' }), { x: 0.5, y: 0.25, b: 'r', a: 'click' });
+  assert.deepEqual(pointerMsg({ x: 0, y: 1 }), { x: 0, y: 1, b: 'l', a: 'click' });
+  assert.deepEqual(pointerMsg({ x: 0.1, y: 0.2, a: 'down' }), { x: 0.1, y: 0.2, b: 'l', a: 'down' });
+  assert.equal(pointerMsg({ x: 0.1, y: 0.2, a: 'explode' }).a, 'click');
   assert.equal(pointerMsg({ x: 1.2, y: 0.5 }), null);
   assert.equal(pointerMsg({ x: 'a', y: 0.5 }), null);
 });

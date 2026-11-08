@@ -9,7 +9,8 @@ that needs nothing installed on the phone.
    to OBS in one click.
 2. **Reverse mirroring: the PC screen on the phone.** Turn on **Share screen to phone**
    and the phone page's **Screen & remote** tab shows the PC's screen live. PC sound can come
-   along, and with remote control on, tapping the picture clicks on the PC.
+   along. Pinch to zoom in, pick which monitor to show from the phone, and with remote
+   control on, tap, drag and long-press the picture to click, drag and right-click on the PC.
 3. **Phone page from a QR code** (iPhone and Android, in the browser). You scan the code
    once: after that the phone is remembered and can live on its Home Screen like an app.
    HTTPS is optional. The page has three tabs:

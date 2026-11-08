@@ -280,11 +280,13 @@ function stopCast() {
   caster.stop();
 }
 
-/** Tap on the shared picture -> move the real cursor there and click. */
-function clickAt({ x, y, b }) {
+/** Finger on the shared picture -> move the real cursor there, and click / press / release. */
+function clickAt({ x, y, b, a = 'click' }) {
   if (!caster.state.active || process.platform !== 'win32') return;
   helper.input(tapCommand({ x, y }, screen.dipToScreenRect(null, caster.display().bounds)));
-  helper.input(`c ${b}`);
+  if (a === 'click') helper.input(`c ${b}`);
+  else if (a === 'down') helper.input(`d ${b}`);
+  else if (a === 'up') helper.input(`u ${b}`);
 }
 
 // ---- Windows sign-in ----
@@ -468,6 +470,7 @@ app.whenReady().then(async () => {
   caster = new ScreenCaster({ helperExe: helper.exe });
   phone = new PhoneServer({
     castActive: () => caster.state.active,
+    castScreens: () => ({ list: ScreenCaster.displays().map(({ id, label }) => ({ id, label })), current: String(caster.display().id) }),
     getUploadDir: () => settings.get('uploadDir'),
     isEnabled: () => settings.get('uploadsEnabled'),
     remoteEnabled: () => settings.get('remoteEnabled') && helper.available(),
@@ -515,6 +518,7 @@ app.whenReady().then(async () => {
   });
   phone.on('input', (line) => helper.input(line));
   phone.on('pointer', clickAt);
+  phone.on('cast-display', (id) => updateSettings({ castDisplay: id }));
   phone.on('cast', ({ client, type, data }) => {
     if (type === 'join') caster.join(client);
     else if (type === 'leave') caster.leave(client);

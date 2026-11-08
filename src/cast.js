@@ -103,7 +103,10 @@ class ScreenCaster extends EventEmitter {
         autoplayPolicy: 'no-user-gesture-required',
       },
     });
-    this.win.on('closed', () => {
+    const win = this.win;
+    win.on('closed', () => {
+      // A restart closes the old window after the new one exists: leave the new one alone.
+      if (this.win !== win) return;
       this.win = null;
       this.ready = false;
       if (this.state.active || this.state.starting) this.setState({ active: false, starting: false, viewers: 0 });

@@ -82,11 +82,15 @@ function castSignal(data) {
   return null;
 }
 
-/** Tap on the shared screen: x, y as fractions (0..1) of the picture. */
+/**
+ * Pointer on the shared screen: x, y as fractions (0..1) of the picture.
+ * a: 'click' (default), 'move' (pointer follows the finger), 'down' / 'up' (drag).
+ */
 function pointerMsg(msg) {
   const x = Number(msg.x), y = Number(msg.y);
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
-  return { x, y, b: ['l', 'r'].includes(msg.b) ? msg.b : 'l' };
+  const a = ['click', 'move', 'down', 'up'].includes(msg.a) ? msg.a : 'click';
+  return { x, y, b: ['l', 'r'].includes(msg.b) ? msg.b : 'l', a };
 }
 
 // Only plain web links may be opened on the PC.
@@ -183,7 +187,7 @@ class PhoneServer extends EventEmitter {
    */
   constructor(opts) {
     super();
-    this.opts = { remoteEnabled: () => false, castActive: () => false, getShared: () => [], getClip: () => null, getCaCert: () => null, devices: null, ...opts };
+    this.opts = { remoteEnabled: () => false, castActive: () => false, castScreens: () => null, getShared: () => [], getClip: () => null, getCaCert: () => null, devices: null, ...opts };
     this.token = crypto.randomBytes(16).toString('hex');
     this.server = null;
     this.tlsServer = null;
@@ -274,6 +278,8 @@ class PhoneServer extends EventEmitter {
       uploads: !!this.opts.isEnabled(),
       remote: !!this.opts.remoteEnabled(),
       cast: !!this.opts.castActive(),
+      // While sharing: the PC's monitors, so the phone can switch between them.
+      screens: this.opts.castActive() ? this.opts.castScreens() : null,
       shared: this.opts.getShared().map(({ id, name, size }) => ({ id, name, size })),
       clip: this.opts.getClip(),
     };
@@ -320,6 +326,12 @@ class PhoneServer extends EventEmitter {
             ws.watching = msg.type === 'cast-join';
             this.emit('cast', { client: ws.id, type: msg.type === 'cast-join' ? 'join' : 'leave' });
           }
+          return;
+        }
+        // Pick which monitor is shared (only while sharing is on).
+        if (msg.type === 'cast-display') {
+          const screens = this.opts.castActive() && this.opts.castScreens();
+          if (screens && screens.list.some((d) => d.id === String(msg.id))) this.emit('cast-display', String(msg.id));
           return;
         }
         if (!this.opts.remoteEnabled()) return;
