@@ -30,7 +30,14 @@
       <label>Name shown on iPhone
         <input id="deviceName" maxlength="60">
       </label>
-      <label class="check"><input type="checkbox" id="playAudio"> Play the phone's sound on this PC</label>
+      <label>Sound
+        <select id="audioMode">
+          <option value="pc">Play on this PC</option>
+          <option value="phone">Keep on the phone (experimental)</option>
+          <option value="off">Mute (phone is silent too)</option>
+        </select>
+      </label>
+      <p class="hint small hidden" id="audioHint">If the phone still goes silent, or won't mirror, iOS doesn't allow this on your device. Switch back to another option.</p>
       <label class="check"><input type="checkbox" id="requirePin"> Ask for a PIN before mirroring</label>
       <label class="check"><input type="checkbox" id="fullscreen"> Open mirrored screen full-screen</label>
       <label class="check"><input type="checkbox" id="h265"> Allow 4K / HEVC (needs a recent GPU)</label>

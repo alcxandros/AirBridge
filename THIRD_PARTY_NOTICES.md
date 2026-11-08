@@ -17,6 +17,7 @@ Full licence texts ship in `resources/uxplay/licenses/`.
 | qrcode | QR code generation | MIT | https://github.com/soldair/node-qrcode |
 
 **Source code offer.** Source for AirBridge is at https://github.com/alcxandros/airbridge.
+UxPlay is modified by the patches in `patches/` (GPL-3.0), and
 `scripts/build-uxplay.sh` rebuilds the exact UxPlay bundle from the upstream
 sources and MSYS2 packages listed above.
 

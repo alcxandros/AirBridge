@@ -1,0 +1,44 @@
+diff --git a/uxplay.cpp b/uxplay.cpp
+index 5ad4e39..e6181e7 100644
+--- a/uxplay.cpp
++++ b/uxplay.cpp
+@@ -118,6 +118,7 @@ static unsigned char compression_type = 0;
+ static std::string audiosink = "autoaudiosink";
+ static int  audiodelay = -1;
+ static bool use_audio = true;
++static bool no_audio_features = false;
+ #if __APPLE__
+ static bool new_window_closing_behavior = false;
+ #else
+@@ -1180,6 +1181,7 @@ static void print_info (char *name) {
+     printf("-nc       Do NOT  Close video window when client stops mirroring\n");
+     printf("-nc no    Cancel the -nc option (DO close video window) \n");
+     printf("-nohold   Drop current connection when new client connects.\n");
++    printf("-noaudiofeat Advertise no audio support (client keeps its audio)\n");
+     printf("-restrict Restrict clients to those specified by \"-allow <deviceID>\"\n");
+     printf("          UxPlay displays deviceID when a client attempts to connect\n");
+     printf("          Use \"-restrict no\" for no client restrictions (default)\n");
+@@ -2033,6 +2035,9 @@ static void parse_arguments (int argc, char *argv[]) {
+                     continue;
+                 }
+             }
++        } else if (arg == "-noaudiofeat") {
++            no_audio_features = true;
++            use_audio = false;
+         } else if (arg == "-nohold") {
+             nohold = 1;
+         } else if (arg == "-al") {
+@@ -2558,6 +2563,13 @@ static int start_dnssd(std::vector<char> hw_addr, std::string name) {
+     /* needed for HLS video support */
+     dnssd_set_airplay_features(dnssd, 0, (int) hls_support);
+     dnssd_set_airplay_features(dnssd, 4, (int) hls_support);
++
++    /* AirBridge: "-noaudiofeat" advertises no audio support, so the client may
++     * keep playing sound itself while mirroring video to this receiver. */
++    if (no_audio_features) {
++        int audio_bits[] = { 9, 11, 18, 19, 20, 21 };
++        for (int b : audio_bits) dnssd_set_airplay_features(dnssd, b, 0);
++    }
+     // not sure about this one (bit 8, screen rotation supported):
+     //dnssd_set_airplay_features(dnssd, 8, (int) hls_support);
+     

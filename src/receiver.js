@@ -29,9 +29,14 @@ function findUxPlay(resourcesPath, appRoot) {
 function buildArgs(settings, keyFile) {
   const args = ['-n', settings.deviceName, '-nh', '-p', String(BASE_PORT)];
   if (IS_WIN) args.push('-vs', 'd3d12videosink');
-  // "-as 0": no audio stream; the phone keeps playing sound itself.
-  if (settings.playAudio === false) args.push('-as', '0');
-  else if (IS_WIN) args.push('-as', 'wasapisink');
+  if (settings.audioMode === 'phone') {
+    // AirBridge patch: advertise no audio support so iOS may keep sound on the phone.
+    args.push('-noaudiofeat');
+  } else if (settings.audioMode === 'off') {
+    args.push('-as', '0'); // accept the audio stream but don't play it
+  } else if (IS_WIN) {
+    args.push('-as', 'wasapisink');
+  }
   if (settings.fullscreen) args.push('-fs');
   if (settings.h265) args.push('-h265');
   if (settings.requirePin && /^\d{4}$/.test(settings.pin || '')) args.push('-pin', settings.pin);

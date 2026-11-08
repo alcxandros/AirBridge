@@ -105,10 +105,22 @@ test('buildArgs maps settings to UxPlay flags', () => {
   assert.deepEqual(args.slice(-2), ['-key', 'k.pem']);
 });
 
-test('buildArgs turns audio off with -as 0', () => {
-  const on = buildArgs({ deviceName: 'PC', playAudio: true });
-  const off = buildArgs({ deviceName: 'PC', playAudio: false });
-  assert.ok(!on.includes('0'));
+test('buildArgs maps the three sound modes', () => {
+  const pc = buildArgs({ deviceName: 'PC', audioMode: 'pc' });
+  const off = buildArgs({ deviceName: 'PC', audioMode: 'off' });
+  const phone = buildArgs({ deviceName: 'PC', audioMode: 'phone' });
+  assert.ok(!pc.includes('0') && !pc.includes('-noaudiofeat'));
   assert.deepEqual(off.slice(off.indexOf('-as'), off.indexOf('-as') + 2), ['-as', '0']);
   assert.equal(off.filter((a) => a === '-as').length, 1);
+  assert.ok(phone.includes('-noaudiofeat') && !phone.includes('-as'));
+});
+
+test('settings migrate the old playAudio checkbox', () => {
+  const { Settings } = require('../src/settings');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'airbridge-settings-'));
+  fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ playAudio: false }));
+  const s = new Settings(dir);
+  assert.equal(s.get('audioMode'), 'off');
+  assert.equal(s.update({ audioMode: 'bogus' }).audioMode, 'off');
+  fs.rmSync(dir, { recursive: true, force: true });
 });

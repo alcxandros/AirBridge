@@ -30,7 +30,8 @@ function render(s) {
   $('rxText').textContent = text;
   $('nameEcho').textContent = st.deviceName;
   if (document.activeElement !== $('deviceName')) $('deviceName').value = st.deviceName;
-  $('playAudio').checked = st.playAudio;
+  $('audioMode').value = st.audioMode;
+  $('audioHint').classList.toggle('hidden', st.audioMode !== 'phone');
   $('requirePin').checked = st.requirePin;
   $('fullscreen').checked = st.fullscreen;
   $('h265').checked = st.h265;
@@ -77,7 +78,7 @@ function render(s) {
 const set = (patch) => api.updateSettings(patch).then(render);
 
 $('receiverEnabled').onchange = (e) => set({ receiverEnabled: e.target.checked });
-$('playAudio').onchange = (e) => set({ playAudio: e.target.checked });
+$('audioMode').onchange = (e) => set({ audioMode: e.target.value });
 $('requirePin').onchange =(e) => set({ requirePin: e.target.checked });
 $('fullscreen').onchange = (e) => set({ fullscreen: e.target.checked });
 $('h265').onchange = (e) => set({ h265: e.target.checked });

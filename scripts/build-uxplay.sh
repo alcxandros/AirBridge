@@ -31,7 +31,14 @@ if [ ! -d "$SRC/.git" ]; then
   git clone --quiet "$UXPLAY_REPO" "$SRC"
 fi
 git -C "$SRC" fetch --quiet origin
-git -C "$SRC" -c advice.detachedHead=false checkout --quiet "$UXPLAY_REF"
+git -C "$SRC" -c advice.detachedHead=false checkout --quiet --force "$UXPLAY_REF"
+
+# AirBridge's small changes to UxPlay (GPL-3.0; see patches/ for what each does).
+for p in "$ROOT"/patches/*.patch; do
+  [ -f "$p" ] || continue
+  echo "    applying $(basename "$p")"
+  git -C "$SRC" apply --whitespace=nowarn "$p"
+done
 
 echo "==> Building"
 # -mwindows: GUI-subsystem exe, so no console window appears and the app can
