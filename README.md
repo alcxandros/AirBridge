@@ -8,18 +8,19 @@ that needs nothing installed on the phone.
    sound goes (see below), take screenshots, record sessions to MP4, and add the mirror
    to OBS in one click.
 2. **Reverse mirroring: the PC screen on the phone.** Turn on **Share screen to phone**
-   and the phone page's **Screen** tab shows the PC's screen live. PC sound can come
+   and the phone page's **Screen & remote** tab shows the PC's screen live. PC sound can come
    along, and with remote control on, tapping the picture clicks on the PC.
 3. **Phone page from a QR code** (iPhone and Android, in the browser). You scan the code
    once: after that the phone is remembered and can live on its Home Screen like an app.
-   HTTPS is optional:
-   - **Send:** photos and files from the phone land in a folder on the PC.
-   - **Get:** files you drop into AirBridge on the PC can be downloaded on the phone.
-   - **Clipboard:** text from the phone is copied on the PC, and you can push the PC's
-     clipboard to the phone.
-   - **Link:** a link from the phone opens in the PC's browser.
-   - **Remote:** the phone becomes a trackpad, keyboard and media remote. This is off
-     by default.
+   HTTPS is optional. The page has three tabs:
+   - **Files:** photos and files from the phone land in a folder on the PC, and files
+     you drop into AirBridge on the PC can be downloaded on the phone.
+   - **Screen & remote:** the PC's screen live (when sharing is on), with a trackpad,
+     keyboard and media keys underneath, so you can see what you're controlling. Remote
+     control is off by default.
+   - **Clipboard & links:** text from the phone is copied on the PC, you can push the
+     PC's clipboard to the phone, and a link from the phone opens in the PC's browser.
+   A dot on Files or Clipboard & links means something new arrived from the PC.
 
 Windows 10/11 (x64) is the main target. The app shell also runs on macOS and Linux
 if `uxplay` is installed there (for example `brew install uxplay` or `apt install uxplay`).
@@ -89,7 +90,7 @@ On those systems the remote control and output picker aren't available.
     the PC's mute setting is put back when sharing stops.
   - **Picture:** *Sharp* is 30 fps and keeps text crisp. *Smooth* is 60 fps and is
     better for video and games.
-- **Phone:** open the **Screen** tab. **Sound on** is needed because browsers only play
+- **Phone:** open the **Screen & remote** tab. **Sound on** is needed because browsers only play
   audio after a tap. **Fill screen** shows the picture edge to edge (turn the phone
   sideways). With **remote control** on, tap the picture to click at that spot,
   two-finger tap to right-click, and drag two fingers to scroll. The tap is mapped to
@@ -167,7 +168,7 @@ Renderer`, set the capture method to *Windows 10 (1903 and up)*, and tick *Clien
   GStreamer's HTTP/TLS plugins. Mirroring and audio streaming work.
 - Without the optional HTTPS setup, the phone page runs over plain HTTP on your LAN, so
   the phone's browser blocks some features. For example, the page can't read the
-  phone's clipboard by itself, so you paste into the Clipboard tab.
+  phone's clipboard by itself, so you paste into the **Clipboard & links** tab.
 
 ## Use it
 

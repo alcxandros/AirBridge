@@ -138,7 +138,7 @@ function renderBridge(s) {
   $('autoCopyClipboard').checked = st.autoCopyClipboard;
   fill($('phoneTexts'), s.phoneTexts.slice(0, 5).map((t) => li(t.text, [['Copy', () => api.copyText(t.text)]])));
   $('autoOpenLinks').checked = st.autoOpenLinks;
-  fill($('linkList'), s.links.slice(0, 8).map((l) => li(l.url, [['Open', () => api.openLink(l.url)]])), "Use the phone's Link tab.");
+  fill($('linkList'), s.links.slice(0, 8).map((l) => li(l.url, [['Open', () => api.openLink(l.url)]])), "Use “Clipboard & links” on the phone.");
   $('remoteEnabled').checked = st.remoteEnabled;
   $('remoteEnabled').disabled = !s.remoteAvailable;
   if (!s.remoteAvailable) $('remoteHint').textContent = 'Remote control needs the AirBridge helper (Windows build).';
@@ -192,7 +192,7 @@ function renderCast(s) {
   $('castText').textContent = c.error
     ? c.error
     : c.active
-      ? `Sharing ${c.width}×${c.height}, ${watching}. Open the Screen tab on the phone.`
+      ? `Sharing ${c.width}×${c.height}, ${watching}. Open “Screen & remote” on the phone.`
       : c.starting
         ? 'Starting…'
         : 'Off';
@@ -280,7 +280,7 @@ $('chooseShare').onclick =() => api.chooseShareFiles().then(render);
 $('sendClip').onclick = async () => {
   const res = await api.sendClipboard();
   $('clipMsg').className = res.ok ? 'small ok' : 'small err';
-  $('clipMsg').textContent = res.ok ? "Sent. It's in the phone's Clipboard tab." : 'Your clipboard has no text.';
+  $('clipMsg').textContent = res.ok ? "Sent. It's under “Clipboard & links” on the phone." : 'Your clipboard has no text.';
 };
 
 // Drag files from Explorer onto the drop zone (and ignore drops elsewhere).
