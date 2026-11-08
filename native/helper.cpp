@@ -5,6 +5,7 @@
 //                              which is what GStreamer's wasapisink "device" expects)
 //   airbridge-helper windows <pid>  list that process's visible windows (for screenshots)
 //   airbridge-helper loopback [mute]  stream system sound as float32 stereo (see loopback())
+//   airbridge-helper sleep     put the PC to sleep (never hibernate)
 //   airbridge-helper input     read input commands from stdin, one per line:
 //       m <dx> <dy>            relative mouse move
 //       a <x> <y>              absolute move on the virtual desktop (0..65535 each)
@@ -23,6 +24,7 @@
 #include <functiondiscoverykeys_devpkey.h>
 #include <audioclient.h>
 #include <endpointvolume.h>
+#include <powrprof.h>
 #include <fcntl.h>
 #include <io.h>
 #include <cstdint>
@@ -315,6 +317,8 @@ static int loopback(bool mute) {
 
 int main(int argc, char **argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);
+  // SetSuspendState(FALSE, ...) sleeps; "rundll32 powrprof.dll,SetSuspendState" can hibernate instead.
+  if (argc >= 2 && !strcmp(argv[1], "sleep")) return SetSuspendState(FALSE, FALSE, FALSE) ? 0 : 1;
   if (argc >= 2 && !strcmp(argv[1], "loopback")) return loopback(argc >= 3 && !strcmp(argv[2], "mute"));
   if (argc >= 3 && !strcmp(argv[1], "windows")) return EnumWindows(enumWin, (LPARAM)strtoul(argv[2], nullptr, 10)) ? 0 : 1;
   if (argc >= 2 && !strcmp(argv[1], "audio")) return listAudio();

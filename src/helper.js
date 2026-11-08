@@ -61,6 +61,11 @@ class Helper {
     });
   }
 
+  /** Puts the PC to sleep. */
+  sleep() {
+    if (this.exe) execFile(this.exe, ['sleep'], { windowsHide: true }, () => {});
+  }
+
   /** Send one command line to the long-running input process (started on demand). */
   input(line) {
     if (!this.exe) return;

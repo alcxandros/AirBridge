@@ -82,6 +82,8 @@ function castSignal(data) {
   return null;
 }
 
+const POWER_ACTIONS = ['lock', 'sleep', 'restart', 'shutdown', 'cancel'];
+
 /**
  * Pointer on the shared screen: x, y as fractions (0..1) of the picture.
  * a: 'click' (default), 'move' (pointer follows the finger), 'down' / 'up' (drag).
@@ -335,6 +337,11 @@ class PhoneServer extends EventEmitter {
           return;
         }
         if (!this.opts.remoteEnabled()) return;
+        // PC power: lock, sleep, restart, shut down (and cancel a pending restart/shutdown).
+        if (msg.type === 'power') {
+          if (POWER_ACTIONS.includes(msg.action)) this.emit('power', { action: msg.action, from: ws.who && ws.who.name });
+          return;
+        }
         // Tap on the shared screen: click at that point.
         if (msg.type === 'tap') {
           const p = pointerMsg(msg);
@@ -560,4 +567,4 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-module.exports = { PhoneServer, sanitizeFilename, inputToCommands, normalizeLink, castSignal, pointerMsg };
+module.exports = { POWER_ACTIONS, PhoneServer, sanitizeFilename, inputToCommands, normalizeLink, castSignal, pointerMsg };

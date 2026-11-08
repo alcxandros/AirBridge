@@ -56,6 +56,10 @@
   .btns { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px; }
   .btns button, .keys button { font:inherit; font-size:14px; padding:12px 0; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); user-select:none; -webkit-user-select:none; }
   .btns button.held { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .power { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .power button { font:inherit; font-size:14px; padding:12px 0; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
+  .power button[data-power=shutdown], .power button[data-power=restart] { color:var(--err); }
+  #powerCancel { width:100%; margin-top:8px; }
   .keys { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
   #kb { margin-top:10px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin:8px 0 4px; font-size:14px; }
@@ -176,6 +180,16 @@
           <button data-key="prev">⏮</button><button data-key="playpause">⏯</button><button data-key="next">⏭</button><button data-key="mute">🔇</button>
           <button data-key="voldown">Vol −</button><button data-key="volup">Vol +</button><button data-key="f11">F11</button><button data-key="win">⊞</button>
         </div>
+      </details>
+      <details id="powerBox">
+        <summary>PC power</summary>
+        <div class="power">
+          <button data-power="lock">Lock</button><button data-power="sleep">Sleep</button>
+          <button data-power="restart">Restart</button><button data-power="shutdown">Shut down</button>
+        </div>
+        <button class="ghost hidden" id="powerCancel">Cancel restart / shut down</button>
+        <p class="msg" id="powerMsg"></p>
+        <p class="muted small">After Sleep or Shut down, the phone can't wake the PC again: someone has to press a key or the power button.</p>
       </details>
     </div>
   </section>
@@ -432,6 +446,25 @@
     send({ type: on ? 'd' : 'u', b: 'l' });
   };
   document.querySelectorAll('[data-key]').forEach((b) => (b.onclick = () => send({ type: 'k', k: b.dataset.key })));
+
+  // PC power. Sleep / restart / shut down ask first; restart and shut down wait
+  // 20 seconds on the PC and can be cancelled from here.
+  const POWER_ASK = { sleep: 'Put the PC to sleep?', restart: 'Restart the PC? Unsaved work on it may be lost.', shutdown: 'Shut down the PC? Unsaved work on it may be lost.' };
+  const POWER_DONE = { lock: 'PC locked.', sleep: 'PC is going to sleep.', restart: 'PC restarts in 20 seconds.', shutdown: 'PC shuts down in 20 seconds.', cancel: 'Cancelled.' };
+  let powerTimer = null;
+  function power(action) {
+    if (POWER_ASK[action] && !confirm(POWER_ASK[action])) return;
+    if (!ws || ws.readyState !== 1) { $('powerMsg').textContent = 'Not connected to the PC.'; $('powerMsg').className = 'msg err'; return; }
+    send({ type: 'power', action });
+    $('powerMsg').textContent = POWER_DONE[action];
+    $('powerMsg').className = 'msg ok';
+    const pending = action === 'restart' || action === 'shutdown';
+    $('powerCancel').classList.toggle('hidden', !pending);
+    clearTimeout(powerTimer);
+    if (pending) powerTimer = setTimeout(() => $('powerCancel').classList.add('hidden'), 20000);
+  }
+  document.querySelectorAll('[data-power]').forEach((b) => (b.onclick = () => power(b.dataset.power)));
+  $('powerCancel').onclick = () => power('cancel');
 
   // Keyboard: keep a placeholder character so Backspace always fires an event.
   const kb = $('kb');

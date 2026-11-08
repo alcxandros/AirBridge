@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const { execFile } = require('child_process');
 
 const { Settings } = require('./settings');
 const { Receiver } = require('./receiver');
@@ -131,8 +132,8 @@ async function pushState() {
   if (!pushTimer) pushTimer = setTimeout(() => ((pushTimer = null), buildTrayMenu()), 250);
 }
 
-function notify(title, body, onClick) {
-  if (!Notification.isSupported() || (win && win.isVisible() && win.isFocused())) return;
+function notify(title, body, onClick, { always = false } = {}) {
+  if (!Notification.isSupported() || (!always && win && win.isVisible() && win.isFocused())) return;
   const n = new Notification({ title, body, silent: true, icon: ICON });
   if (onClick) n.on('click', onClick);
   n.show();
@@ -290,6 +291,39 @@ function clickAt({ x, y, b, a = 'click' }) {
   if (a === 'click') helper.input(`c ${b}`);
   else if (a === 'down') helper.input(`d ${b}`);
   else if (a === 'up') helper.input(`u ${b}`);
+}
+
+// ---- PC power from the phone ----
+
+// Restart / shut down wait this long, so it can still be cancelled (from the
+// phone, the notification, or "shutdown /a").
+const POWER_DELAY_S = 20;
+
+function powerAction({ action, from }) {
+  if (process.platform !== 'win32') return;
+  const who = from || 'A phone';
+  const run = (cmd, args) => execFile(cmd, args, { windowsHide: true }, () => {});
+  const sys = (exe) => path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', exe);
+  switch (action) {
+    case 'lock':
+      run(sys('rundll32.exe'), ['user32.dll,LockWorkStation']);
+      break;
+    case 'sleep':
+      // Let the phone get its reply before the network goes down.
+      setTimeout(() => helper.sleep(), 1500);
+      break;
+    case 'restart':
+    case 'shutdown': {
+      const verb = action === 'restart' ? 'restart' : 'shut down';
+      run(sys('shutdown.exe'), [action === 'restart' ? '/r' : '/s', '/t', String(POWER_DELAY_S), '/c', `AirBridge: ${who} asked this PC to ${verb}.`]);
+      notify(`${who} is ${action === 'restart' ? 'restarting' : 'shutting down'} this PC`, `In ${POWER_DELAY_S} seconds. Click to cancel.`, () => run(sys('shutdown.exe'), ['/a']), { always: true });
+      break;
+    }
+    case 'cancel':
+      run(sys('shutdown.exe'), ['/a']);
+      notify('Restart / shut down cancelled', `Cancelled from ${who}.`, null, { always: true });
+      break;
+  }
 }
 
 // ---- Windows sign-in ----
@@ -521,6 +555,7 @@ app.whenReady().then(async () => {
   });
   phone.on('input', (line) => helper.input(line));
   phone.on('pointer', clickAt);
+  phone.on('power', powerAction);
   phone.on('cast-display', (id) => updateSettings({ castDisplay: id }));
   phone.on('cast', ({ client, type, data }) => {
     if (type === 'join') caster.join(client);

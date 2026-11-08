@@ -489,3 +489,24 @@ test('Tailscale addresses are offered after real LAN adapters, before other virt
     ['172.20.0.1', 'vEthernet (WSL)', false],
   ]);
 });
+
+test('power actions need remote control and a known action', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-power-'));
+  let remote = false;
+  const srv = new PhoneServer({ getUploadDir: () => dir, isEnabled: () => true, remoteEnabled: () => remote });
+  const got = [];
+  srv.on('power', (p) => got.push(p.action));
+  const port = await srv.start(0, '127.0.0.1');
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?t=${srv.token}`);
+  await new Promise((r) => ws.once('message', r));
+  ws.send(JSON.stringify({ type: 'power', action: 'shutdown' })); // ignored: remote control is off
+  await new Promise((r) => setTimeout(r, 150));
+  remote = true;
+  ws.send(JSON.stringify({ type: 'power', action: 'format-c' }));
+  ws.send(JSON.stringify({ type: 'power', action: 'lock' }));
+  await new Promise((r) => setTimeout(r, 150));
+  assert.deepEqual(got, ['lock']);
+  ws.close();
+  await srv.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
