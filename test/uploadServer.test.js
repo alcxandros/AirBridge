@@ -104,3 +104,11 @@ test('buildArgs maps settings to UxPlay flags', () => {
   assert.ok(!args.includes('-h265'));
   assert.deepEqual(args.slice(-2), ['-key', 'k.pem']);
 });
+
+test('buildArgs turns audio off with -as 0', () => {
+  const on = buildArgs({ deviceName: 'PC', playAudio: true });
+  const off = buildArgs({ deviceName: 'PC', playAudio: false });
+  assert.ok(!on.includes('0'));
+  assert.deepEqual(off.slice(off.indexOf('-as'), off.indexOf('-as') + 2), ['-as', '0']);
+  assert.equal(off.filter((a) => a === '-as').length, 1);
+});

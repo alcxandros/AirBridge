@@ -9,6 +9,7 @@ const DEFAULTS = {
   requirePin: false,
   pin: '',
   fullscreen: false,
+  playAudio: true,
   h265: false,
   uploadsEnabled: true,
   uploadDir: path.join(os.homedir(), 'Downloads', 'AirBridge'),

@@ -193,7 +193,7 @@ ipcMain.handle('update-settings', async (_e, patch) => {
   const after = settings.update(patch);
   uploads.opts.deviceName = after.deviceName;
 
-  const receiverKeys = ['deviceName', 'requirePin', 'pin', 'fullscreen', 'h265'];
+  const receiverKeys = ['deviceName', 'requirePin', 'pin', 'fullscreen', 'h265', 'playAudio'];
   const receiverChanged = receiverKeys.some((k) => before[k] !== after[k]);
   if (before.receiverEnabled !== after.receiverEnabled) {
     if (after.receiverEnabled) receiver.restart(after);
