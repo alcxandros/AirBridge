@@ -35,6 +35,8 @@ async function start(opts) {
     });
     const [video] = stream.getVideoTracks();
     video.contentHint = q.hint;
+    // PC sound captured by the helper arrives as PCM; turn it into an audio track.
+    if (options.externalAudio) await startExternalAudio();
     // If Windows ends the capture (display unplugged, etc.), tell main.
     video.addEventListener('ended', () => {
       stop();
@@ -46,10 +48,34 @@ async function start(opts) {
   }
 }
 
+let audioCtx = null;
+let pcmNode = null;
+
+async function startExternalAudio() {
+  try {
+    audioCtx = new AudioContext({ latencyHint: 'interactive' });
+    await audioCtx.audioWorklet.addModule('pcm-worklet.js');
+    pcmNode = new AudioWorkletNode(audioCtx, 'pcm-player', { numberOfInputs: 0, outputChannelCount: [2] });
+    const dest = audioCtx.createMediaStreamDestination();
+    pcmNode.connect(dest);
+    if (audioCtx.state !== 'running') await audioCtx.resume();
+    for (const t of dest.stream.getAudioTracks()) stream.addTrack(t);
+  } catch (e) {
+    bridge.send({ type: 'log', message: `PC sound unavailable: ${e.message}` });
+  }
+}
+
+bridge.onAudio((pcm) => {
+  if (pcmNode) pcmNode.port.postMessage({ pcm }, [pcm.buffer]);
+});
+
 function stop() {
   for (const id of [...peers.keys()]) dropViewer(id);
   if (stream) stream.getTracks().forEach((t) => t.stop());
   stream = null;
+  if (audioCtx) audioCtx.close().catch(() => {});
+  audioCtx = null;
+  pcmNode = null;
   report();
 }
 
@@ -114,6 +140,7 @@ async function onSignal(id, data) {
 bridge.onCommand((cmd) => {
   if (cmd.type === 'start') start(cmd.options);
   else if (cmd.type === 'stop') stop();
+  else if (cmd.type === 'audio-format' && pcmNode) pcmNode.port.postMessage({ rate: cmd.rate });
   else if (cmd.type === 'join') addViewer(cmd.id);
   else if (cmd.type === 'leave') dropViewer(cmd.id);
   else if (cmd.type === 'signal') onSignal(cmd.id, cmd.data);

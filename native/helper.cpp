@@ -4,6 +4,7 @@
 //                              ('*' marks the default device; id is IMMDevice::GetId,
 //                              which is what GStreamer's wasapisink "device" expects)
 //   airbridge-helper windows <pid>  list that process's visible windows (for screenshots)
+//   airbridge-helper loopback [mute]  stream system sound as float32 stereo (see loopback())
 //   airbridge-helper input     read input commands from stdin, one per line:
 //       m <dx> <dy>            relative mouse move
 //       a <x> <y>              absolute move on the virtual desktop (0..65535 each)
@@ -18,9 +19,15 @@
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <functiondiscoverykeys_devpkey.h>
+#include <audioclient.h>
+#include <endpointvolume.h>
+#include <fcntl.h>
+#include <io.h>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 static std::string narrow(const wchar_t *w) {
   int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
@@ -185,8 +192,108 @@ static BOOL CALLBACK enumWin(HWND h, LPARAM pid) {
   return TRUE;
 }
 
+// System sound capture for "share PC screen to phone". Records what the default
+// output device plays (WASAPI loopback, in the device's own mix format, so it
+// works with drivers that reject Chromium's requested format) and writes
+//   "fmt <rate> 2\n" then raw little-endian float32 stereo frames
+// to stdout until stdin closes. With "mute", the PC's speakers are muted while
+// it runs (loopback is taken before the endpoint volume, so the phone still gets
+// sound) and the previous mute state is restored on exit.
+static volatile LONG g_stop = 0;
+static DWORD WINAPI stdinWatch(LPVOID) {
+  char buf[256];
+  while (fgets(buf, sizeof buf, stdin)) {}
+  InterlockedExchange(&g_stop, 1);
+  return 0;
+}
+static BOOL WINAPI ctrlHandler(DWORD) {
+  InterlockedExchange(&g_stop, 1);
+  return TRUE;
+}
+
+static float sampleAt(const BYTE *p, const WAVEFORMATEX *wf, bool isFloat) {
+  switch (wf->wBitsPerSample) {
+    case 32: return isFloat ? *(const float *)p : (float)(*(const int32_t *)p / 2147483648.0);
+    case 24: { int32_t v = (int32_t)((p[0] << 8) | (p[1] << 16) | (p[2] << 24)); return (float)(v / 2147483648.0); }
+    case 16: return *(const int16_t *)p / 32768.0f;
+    case 8: return (p[0] - 128) / 128.0f;
+  }
+  return 0;
+}
+
+static int loopback(bool mute) {
+  _setmode(_fileno(stdout), _O_BINARY);
+  if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return 1;
+  IMMDeviceEnumerator *en = nullptr;
+  IMMDevice *dev = nullptr;
+  IAudioClient *client = nullptr;
+  IAudioCaptureClient *cap = nullptr;
+  IAudioEndpointVolume *vol = nullptr;
+  WAVEFORMATEX *wf = nullptr;
+  HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void **)&en);
+  if (SUCCEEDED(hr)) hr = en->GetDefaultAudioEndpoint(eRender, eConsole, &dev);
+  if (SUCCEEDED(hr)) hr = dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void **)&client);
+  if (SUCCEEDED(hr)) hr = client->GetMixFormat(&wf);
+  if (SUCCEEDED(hr)) hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 200 * 10000, 0, wf, nullptr);
+  if (SUCCEEDED(hr)) hr = client->GetService(__uuidof(IAudioCaptureClient), (void **)&cap);
+  if (FAILED(hr)) {
+    fprintf(stderr, "loopback failed: 0x%08lx\n", (unsigned long)hr);
+    return 1;
+  }
+  bool isFloat = wf->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+                 (wf->wFormatTag == WAVE_FORMAT_EXTENSIBLE && ((WAVEFORMATEXTENSIBLE *)wf)->SubFormat.Data1 == WAVE_FORMAT_IEEE_FLOAT);  // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+  const int ch = wf->nChannels, bytes = wf->wBitsPerSample / 8;
+
+  BOOL wasMuted = FALSE;
+  if (mute && SUCCEEDED(dev->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void **)&vol))) {
+    vol->GetMute(&wasMuted);
+    vol->SetMute(TRUE, nullptr);
+  }
+  SetConsoleCtrlHandler(ctrlHandler, TRUE);
+  CreateThread(nullptr, 0, stdinWatch, nullptr, 0, nullptr);
+
+  printf("fmt %lu 2\n", (unsigned long)wf->nSamplesPerSec);
+  fflush(stdout);
+  client->Start();
+  std::vector<float> out;
+  while (!g_stop) {
+    Sleep(10);
+    UINT32 packet = 0;
+    while (!g_stop && SUCCEEDED(cap->GetNextPacketSize(&packet)) && packet) {
+      BYTE *data = nullptr;
+      UINT32 frames = 0;
+      DWORD flags = 0;
+      if (FAILED(cap->GetBuffer(&data, &frames, &flags, nullptr, nullptr))) break;
+      out.assign((size_t)frames * 2, 0.0f);
+      if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
+        for (UINT32 i = 0; i < frames; i++) {
+          const BYTE *f = data + (size_t)i * wf->nBlockAlign;
+          float l = sampleAt(f, wf, isFloat);
+          float r = ch > 1 ? sampleAt(f + bytes, wf, isFloat) : l;
+          out[i * 2] = l;
+          out[i * 2 + 1] = r;
+        }
+      }
+      cap->ReleaseBuffer(frames);
+      if (fwrite(out.data(), sizeof(float), out.size(), stdout) != out.size()) InterlockedExchange(&g_stop, 1);
+    }
+  }
+  client->Stop();
+  if (vol) {
+    vol->SetMute(wasMuted, nullptr);
+    vol->Release();
+  }
+  cap->Release();
+  client->Release();
+  CoTaskMemFree(wf);
+  dev->Release();
+  en->Release();
+  return 0;
+}
+
 int main(int argc, char **argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);
+  if (argc >= 2 && !strcmp(argv[1], "loopback")) return loopback(argc >= 3 && !strcmp(argv[2], "mute"));
   if (argc >= 3 && !strcmp(argv[1], "windows")) return EnumWindows(enumWin, (LPARAM)strtoul(argv[2], nullptr, 10)) ? 0 : 1;
   if (argc >= 2 && !strcmp(argv[1], "audio")) return listAudio();
   if (argc >= 2 && !strcmp(argv[1], "input")) return inputLoop();

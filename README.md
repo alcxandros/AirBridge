@@ -84,7 +84,9 @@ On those systems the remote control and output picker aren't available.
 - **Settings:**
   - **Screen:** which monitor to share. It's captured at its native resolution, up to 4K.
   - **PC sound:** don't send, play on the PC and the phone, or *phone only*. Phone
-    only mutes the PC while sharing, using Electron's `loopbackWithMute`.
+    only mutes the PC while sharing. The sound is captured by `airbridge-helper.exe`
+    (WASAPI loopback in the output device's own format, which some drivers need) and
+    the PC's mute setting is put back when sharing stops.
   - **Picture:** *Sharp* is 30 fps and keeps text crisp. *Smooth* is 60 fps and is
     better for video and games.
 - **Phone:** open the **Screen** tab. **Sound on** is needed because browsers only play

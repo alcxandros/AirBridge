@@ -5,11 +5,16 @@
 
 const { BrowserWindow, desktopCapturer, ipcMain, screen, session } = require('electron');
 const path = require('path');
+const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 
 class ScreenCaster extends EventEmitter {
-  constructor() {
+  constructor({ helperExe } = {}) {
     super();
+    // On Windows, system sound comes from airbridge-helper's WASAPI loopback:
+    // Chromium's own loopback fails on some audio drivers (unsupported format).
+    this.helperExe = helperExe || null;
+    this.audioProc = null;
     this.win = null;
     this.state = { active: false, starting: false, viewers: 0, error: '', display: null, width: 0, height: 0 };
     this.options = { audio: 'off', quality: 'sharp', displayId: '' };
@@ -68,7 +73,7 @@ class ScreenCaster extends EventEmitter {
         const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
         const src = sources.find((s) => String(s.display_id) === String(display.id)) || sources[0];
         if (!src) return callback(null);
-        const audio = this.options.audio === 'phone' ? 'loopbackWithMute' : this.options.audio === 'both' ? 'loopback' : undefined;
+        const audio = this.useHelperAudio() ? undefined : this.options.audio === 'phone' ? 'loopbackWithMute' : this.options.audio === 'both' ? 'loopback' : undefined;
         callback(audio ? { video: src, audio } : { video: src });
       } catch {
         callback(null);
@@ -78,7 +83,10 @@ class ScreenCaster extends EventEmitter {
     this.ready = false;
     // Capture at the display's native size: smaller looks soft, larger only upscales.
     const size = ScreenCaster.physicalSize(this.display());
-    this.pending = [{ type: 'start', options: { audio: this.options.audio !== 'off', quality: this.options.quality, ...size } }];
+    const helperAudio = this.useHelperAudio();
+    this.pending = [
+      { type: 'start', options: { audio: this.options.audio !== 'off' && !helperAudio, externalAudio: helperAudio, quality: this.options.quality, ...size } },
+    ];
     this.win = new BrowserWindow({
       show: false,
       width: 320,
@@ -91,6 +99,8 @@ class ScreenCaster extends EventEmitter {
         sandbox: true,
         // Keep encoding at full speed while the window is hidden.
         backgroundThrottling: false,
+        // The sound pipeline (AudioContext) must run without a click.
+        autoplayPolicy: 'no-user-gesture-required',
       },
     });
     this.win.on('closed', () => {
@@ -101,7 +111,68 @@ class ScreenCaster extends EventEmitter {
     this.win.loadFile(path.join(__dirname, 'caster', 'caster.html'));
   }
 
+  useHelperAudio() {
+    return process.platform === 'win32' && !!this.helperExe && this.options.audio !== 'off';
+  }
+
+  /** Starts the helper's loopback capture and forwards float32 stereo PCM to the caster page. */
+  startAudio() {
+    this.stopAudio();
+    const proc = spawn(this.helperExe, this.options.audio === 'phone' ? ['loopback', 'mute'] : ['loopback'], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this.audioProc = proc;
+    let header = Buffer.alloc(0);
+    let rest = Buffer.alloc(0);
+    let started = false;
+    proc.stdout.on('data', (d) => {
+      if (this.audioProc !== proc || !this.win) return;
+      if (!started) {
+        header = Buffer.concat([header, d]);
+        const nl = header.indexOf(10);
+        if (nl < 0) return;
+        const m = /^fmt (\d+) 2$/.exec(header.subarray(0, nl).toString().trim());
+        if (!m) return this.audioFailed(proc, 'unexpected output');
+        started = true;
+        this.win.webContents.send('caster-command', { type: 'audio-format', rate: Number(m[1]) });
+        d = header.subarray(nl + 1);
+      }
+      // Keep whole float samples; carry a partial one over to the next chunk.
+      const buf = rest.length ? Buffer.concat([rest, d]) : d;
+      const usable = buf.length - (buf.length % 8);
+      rest = Buffer.from(buf.subarray(usable));
+      if (usable) {
+        const pcm = new Float32Array(usable / 4);
+        Buffer.from(pcm.buffer).set(buf.subarray(0, usable));
+        this.win.webContents.send('caster-audio', pcm);
+      }
+    });
+    let err = '';
+    proc.stderr.on('data', (d) => (err += d));
+    proc.stdin.on('error', () => {});
+    proc.on('error', (e) => this.audioFailed(proc, e.message));
+    proc.on('exit', (code) => {
+      if (this.audioProc === proc && code) this.audioFailed(proc, err.trim() || `exit code ${code}`);
+    });
+  }
+
+  audioFailed(proc, why) {
+    if (this.audioProc !== proc) return;
+    this.stopAudio();
+    // Keep the picture going without sound rather than stopping the share.
+    this.emit('log', `PC sound capture failed (${why}); sharing without sound.`);
+  }
+
+  stopAudio() {
+    const p = this.audioProc;
+    this.audioProc = null;
+    // Closing stdin makes the helper stop and restore the PC's mute state.
+    if (p) p.stdin.end();
+  }
+
   stop() {
+    this.stopAudio();
     if (!this.win) return;
     const w = this.win;
     this.win = null;
@@ -136,6 +207,7 @@ class ScreenCaster extends EventEmitter {
         break;
       case 'started':
         this.setState({ active: true, starting: false, error: '', width: msg.width, height: msg.height });
+        if (this.useHelperAudio()) this.startAudio();
         this.emit('started');
         break;
       case 'error':
