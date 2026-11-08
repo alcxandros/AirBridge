@@ -20,6 +20,7 @@ const { lanAddresses, publicNetworks } = require('./netinfo');
 const { ScreenCaster } = require('./cast');
 const { tapCommand } = require('./pointer');
 const { Updater } = require('./updater');
+const { obsInTasklist } = require('./streamer');
 
 // WebRTC to phones on the LAN: offer real host addresses instead of
 // randomised .local names, which some networks can't resolve.
@@ -125,6 +126,7 @@ async function snapshot() {
     publicNetworks: publicNets,
     log: receiver.logTail.slice(-200),
     version: app.getVersion(),
+    streamer: { on: streamerOn(), obsRunning },
     update: updater ? updater.state : null,
   };
 }
@@ -136,8 +138,43 @@ async function pushState() {
   if (!pushTimer) pushTimer = setTimeout(() => ((pushTimer = null), buildTrayMenu()), 250);
 }
 
-function notify(title, body, onClick, { always = false } = {}) {
+// ---- Streamer mode: keep personal details off a captured screen ----
+
+let obsRunning = false;
+let obsTimer = null;
+const streamerOn = () => !!settings && (settings.get('streamerMode') || (settings.get('streamerAuto') && obsRunning));
+
+// Watches for OBS while "turn on by itself while OBS is running" is set.
+function watchObs() {
+  clearInterval(obsTimer);
+  obsTimer = null;
+  if (!settings.get('streamerAuto') || process.platform !== 'win32') {
+    if (obsRunning) {
+      obsRunning = false;
+      pushState();
+    }
+    return;
+  }
+  const check = () =>
+    execFile('tasklist.exe', ['/FO', 'CSV', '/NH'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
+      const now = !err && obsInTasklist(out);
+      if (now !== obsRunning) {
+        obsRunning = now;
+        pushState();
+      }
+    });
+  check();
+  obsTimer = setInterval(check, 15000);
+  obsTimer.unref();
+}
+
+/**
+ * Desktop notification. `secret` replaces the body in streamer mode (file names,
+ * copied text, links and phone names would otherwise pop up on stream).
+ */
+function notify(title, body, onClick, { always = false, secret = null } = {}) {
   if (!Notification.isSupported() || (!always && win && win.isVisible() && win.isFocused())) return;
+  if (secret !== null && streamerOn()) body = secret;
   const n = new Notification({ title, body, silent: true, icon: ICON });
   if (onClick) n.on('click', onClick);
   n.show();
@@ -269,7 +306,7 @@ async function takeScreenshot() {
   const file = path.join(dir, `AirBridge ${stamp()}.png`);
   fs.writeFileSync(file, src.thumbnail.toPNG());
   lastScreenshot = file;
-  notify('Screenshot saved', path.basename(file), () => shell.showItemInFolder(file));
+  notify('Screenshot saved', path.basename(file), () => shell.showItemInFolder(file), { secret: 'Click to show it.' });
   pushState();
   return { ok: true, file };
 }
@@ -320,12 +357,12 @@ function powerAction({ action, from }) {
     case 'shutdown': {
       const verb = action === 'restart' ? 'restart' : 'shut down';
       run(sys('shutdown.exe'), [action === 'restart' ? '/r' : '/s', '/t', String(POWER_DELAY_S), '/c', `AirBridge: ${who} asked this PC to ${verb}.`]);
-      notify(`${who} is ${action === 'restart' ? 'restarting' : 'shutting down'} this PC`, `In ${POWER_DELAY_S} seconds. Click to cancel.`, () => run(sys('shutdown.exe'), ['/a']), { always: true });
+      notify(`${streamerOn() ? 'A phone' : who} is ${action === 'restart' ? 'restarting' : 'shutting down'} this PC`, `In ${POWER_DELAY_S} seconds. Click to cancel.`, () => run(sys('shutdown.exe'), ['/a']), { always: true });
       break;
     }
     case 'cancel':
       run(sys('shutdown.exe'), ['/a']);
-      notify('Restart / shut down cancelled', `Cancelled from ${who}.`, null, { always: true });
+      notify('Restart / shut down cancelled', `Cancelled from ${who}.`, null, { always: true, secret: 'Cancelled from a phone.' });
       break;
   }
 }
@@ -378,9 +415,9 @@ function showWindow() {
   win.focus();
 }
 
-function receiverStatusText() {
+function receiverStatusText(hideNames = false) {
   const rx = receiver.status();
-  if (rx.state === 'running') return rx.client ? `Mirroring: connected to ${rx.client.name}` : 'Mirroring: ready';
+  if (rx.state === 'running') return rx.client ? `Mirroring: connected to ${hideNames ? 'a device' : rx.client.name}` : 'Mirroring: ready';
   return {
     starting: 'Mirroring: starting…',
     stopped: 'Mirroring: off',
@@ -393,7 +430,8 @@ const short = (s, n = 40) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 function buildTrayMenu() {
   if (!tray) return;
-  const status = receiverStatusText();
+  const hide = streamerOn();
+  const status = receiverStatusText(hide);
   const cs = caster.state;
   const castLabel = cs.active ? `Sharing screen to phone${cs.viewers ? ` (${cs.viewers} watching)` : ''}` : 'Share screen to phone';
   tray.setToolTip(`AirBridge — ${status.replace('Mirroring: ', '')}${cs.active ? ' · sharing your screen' : ''}`);
@@ -426,18 +464,24 @@ function buildTrayMenu() {
       label: 'Text from phone',
       enabled: texts.length > 0,
       submenu: texts.length
-        ? texts.map((t) => ({ label: short(t.text.replace(/\s+/g, ' ')), click: () => clipboard.writeText(t.text) }))
+        ? texts.map((t, i) => ({ label: hide ? `Text ${i + 1} (hidden, click to copy)` : short(t.text.replace(/\s+/g, ' ')), click: () => clipboard.writeText(t.text) }))
         : [{ label: 'Nothing yet', enabled: false }],
     },
     {
       label: 'Recent files',
       submenu: [
-        ...(recent.length ? recent.map((f) => ({ label: short(f.name), click: () => shell.showItemInFolder(f.path) })) : [{ label: 'Nothing yet', enabled: false }]),
+        ...(recent.length ? recent.map((f, i) => ({ label: hide ? `File ${i + 1} (hidden, click to show)` : short(f.name), click: () => shell.showItemInFolder(f.path) })) : [{ label: 'Nothing yet', enabled: false }]),
         { type: 'separator' },
         { label: 'Open upload folder', click: () => shell.openPath(settings.get('uploadDir')) },
       ],
     },
     { type: 'separator' },
+    {
+      label: 'Streamer mode',
+      type: 'checkbox',
+      checked: hide,
+      click: (item) => updateSettings(item.checked ? { streamerMode: true } : { streamerMode: false, streamerAuto: false }),
+    },
     { label: 'Show QR code / Open AirBridge', click: showWindow },
     {
       label: 'Quit',
@@ -482,6 +526,7 @@ async function updateSettings(patch) {
   if (before.startWithWindows !== after.startWithWindows) applyStartWithWindows();
   if (before.theme !== after.theme) nativeTheme.themeSource = after.theme;
   if (before.autoUpdate !== after.autoUpdate) updater.setAuto(after.autoUpdate);
+  if (before.streamerAuto !== after.streamerAuto) watchObs();
   if (before.httpsEnabled !== after.httpsEnabled) await startPhoneServer();
   // Changing what is shared restarts the capture; phones reconnect by themselves.
   if (caster.state.active && ['castAudio', 'castQuality', 'castDisplay'].some((k) => before[k] !== after[k])) startCast();
@@ -538,7 +583,7 @@ app.whenReady().then(async () => {
   phone.on('file', (entry) => {
     received.unshift(entry);
     received.splice(100);
-    notify('File from phone', entry.name, () => shell.showItemInFolder(entry.path));
+    notify('File from phone', entry.name, () => shell.showItemInFolder(entry.path), { secret: 'Click to show it.' });
     pushState();
   });
   phone.on('clipboard', ({ text }) => {
@@ -546,7 +591,7 @@ app.whenReady().then(async () => {
     phoneTexts.splice(20);
     if (settings.get('autoCopyClipboard')) {
       Promise.resolve(clipboard.writeText(text)).catch(() => {});
-      notify('Copied from phone', text.slice(0, 120));
+      notify('Copied from phone', text.slice(0, 120), null, { secret: 'Text from the phone is on the clipboard.' });
     }
     pushState();
   });
@@ -555,11 +600,11 @@ app.whenReady().then(async () => {
     links.unshift({ url, at: Date.now(), opened });
     links.splice(30);
     if (opened) shell.openExternal(url);
-    else notify('Link from phone', url, () => shell.openExternal(url));
+    else notify('Link from phone', url, () => shell.openExternal(url), { secret: 'Click to open it.' });
     pushState();
   });
   phone.on('paired', ({ name }) => {
-    notify('Phone remembered', `${name} can now connect without the QR code.`);
+    notify('Phone remembered', `${name} can now connect without the QR code.`, null, { secret: 'It can now connect without the QR code.' });
     pushState();
   });
   phone.on('input', (line) => helper.input(line));
@@ -606,6 +651,7 @@ app.whenReady().then(async () => {
   updater.on('state', pushState);
   updater.on('ready', (version) => notify(`AirBridge ${version} is ready`, 'Click to restart and update now, or it installs when you quit.', () => updater.install(), { always: true }));
   updater.setAuto(settings.get('autoUpdate'));
+  watchObs();
 });
 
 app.on('before-quit', async (e) => {
@@ -702,6 +748,7 @@ ipcMain.handle('copy-text', (_e, text) => clipboard.writeText(String(text)));
 ipcMain.handle('open-link', (_e, url) => {
   if (links.some((l) => l.url === url)) shell.openExternal(url);
 });
+ipcMain.handle('open-repo', () => shell.openExternal('https://github.com/alcxandros/airbridge'));
 
 // Screenshot
 ipcMain.handle('screenshot', () => takeScreenshot());

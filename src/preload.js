@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('airbridge', {
   screenshot: () => ipcRenderer.invoke('screenshot'),
   chooseRecordFolder: () => ipcRenderer.invoke('choose-record-folder'),
   openRecordFolder: () => ipcRenderer.invoke('open-record-folder'),
+  openRepo: () => ipcRenderer.invoke('open-repo'),
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),

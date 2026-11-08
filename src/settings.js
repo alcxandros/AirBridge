@@ -21,6 +21,8 @@ const DEFAULTS = {
   devices: [], // paired phones: { id, name, hash, created, lastSeen } (see devices.js)
   startWithWindows: false,
   autoUpdate: true, // check GitHub Releases for new versions
+  streamerMode: false, // hide QR code, paths, phone names and texts, log, PIN, notification details
+  streamerAuto: false, // turn streamer mode on by itself while OBS is running
   recordSessions: false,
   recordDir: path.join(os.homedir(), 'Videos', 'AirBridge'),
   screenshotDir: path.join(os.homedir(), 'Pictures', 'AirBridge'),

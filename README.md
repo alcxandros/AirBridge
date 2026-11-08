@@ -29,6 +29,10 @@ that needs nothing installed on the phone.
 5. **Looks:** light, dark or system theme and five accent colours on the PC; the phone page
    follows them, and each phone can override the theme and set trackpad speed and scroll
    direction (gear icon).
+6. **Streamer mode** for streaming or recording your screen: hides the QR code and link,
+   folder paths (your Windows user name), phone and file names, text and links from phones,
+   the log and the PIN, in the app, notifications and the tray. Click a hidden item to show
+   it for 10 seconds. It can turn on by itself while OBS is running.
 
 Windows 10/11 (x64) is the main target. The app shell also runs on macOS and Linux
 if `uxplay` is installed there (for example `brew install uxplay` or `apt install uxplay`).

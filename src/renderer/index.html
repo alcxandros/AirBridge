@@ -7,184 +7,289 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header>
+<aside>
   <div class="brand"><img src="icon.png" alt=""><span>AirBridge</span></div>
-  <div class="appearance">
-    <div class="swatches" id="accents" role="radiogroup" aria-label="Accent colour"></div>
-    <select id="theme" aria-label="Theme">
-      <option value="system">System theme</option>
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-    </select>
+  <nav>
+    <button data-page="connect" class="on">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>
+      <span><b>Connect a phone</b><small id="navConnect"></small></span>
+    </button>
+    <button data-page="mirror">
+      <svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+      <span><b>Mirror iPhone</b><small id="navMirror"></small></span>
+      <i class="dot" id="navMirrorDot"></i>
+    </button>
+    <button data-page="screen">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+      <span><b>Screen &amp; remote</b><small id="navScreen"></small></span>
+      <i class="dot" id="navScreenDot"></i>
+    </button>
+    <button data-page="files">
+      <svg viewBox="0 0 24 24"><path d="M8 3v13M4 7l4-4 4 4M16 21V8M12 17l4 4 4-4"/></svg>
+      <span><b>Files</b><small id="navFiles"></small></span>
+    </button>
+    <button data-page="clip">
+      <svg viewBox="0 0 24 24"><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M9 4h6v3H9z"/></svg>
+      <span><b>Clipboard &amp; links</b><small id="navClip"></small></span>
+    </button>
+    <button data-page="settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+      <span><b>Settings</b><small id="navSettings"></small></span>
+    </button>
+  </nav>
+  <div class="aside-foot">
+    <button class="streamer-chip" id="streamerChip" title="Hide the QR code, folder paths, phone names, texts and links, the log and the PIN">
+      <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span id="streamerChipText">Streamer mode</span>
+    </button>
     <span class="version" id="version"></span>
   </div>
-</header>
+</aside>
 
-<div class="banner hidden" id="publicWarn">
-  <span>Your network <b id="publicNames"></b> is set to <b>Public</b>, so Windows blocks iPhones from finding this computer. Switch it to <b>Private</b>.</span>
-  <button class="ghost" id="fixNetwork">Open network settings</button>
-</div>
-<div class="banner hidden" id="updateBanner">
-  <span>⬆️ <b>AirBridge <span id="updateVersion"></span> is ready to install.</b> It takes a few seconds.</span>
-  <button class="ghost" id="installUpdate">Restart to update</button>
-</div>
-<div class="banner sharing hidden" id="castBanner">
-  <span>🔴 <b>Your screen is being shared</b> <span id="castBannerViewers"></span></span>
-  <button class="ghost" id="castBannerStop">Stop sharing</button>
-</div>
-<main>
-  <section class="card" id="mirror">
-    <div class="card-head">
-      <h2>Screen mirroring</h2>
-      <label class="switch"><input type="checkbox" id="receiverEnabled"><span></span></label>
+<div class="content">
+  <div class="banner hidden" id="publicWarn">
+    <span>Your network <b id="publicNames"></b> is set to <b>Public</b>, so Windows blocks iPhones from finding this computer. Switch it to <b>Private</b>.</span>
+    <button class="ghost" id="fixNetwork">Open network settings</button>
+  </div>
+  <div class="banner hidden" id="updateBanner">
+    <span>⬆️ <b>AirBridge <span id="updateVersion"></span> is ready to install.</b> It takes a few seconds.</span>
+    <button class="ghost" id="installUpdate">Restart to update</button>
+  </div>
+  <div class="banner sharing hidden" id="castBanner">
+    <span>🔴 <b>Your screen is being shared</b> <span id="castBannerViewers"></span></span>
+    <button class="ghost" id="castBannerStop">Stop sharing</button>
+  </div>
+  <div class="banner streaming hidden" id="streamerBanner">
+    <span>👁️‍🗨️ <b>Streamer mode is on.</b> <span id="streamerWhy"></span> Personal details are hidden; click a hidden item to show it for 10 seconds.</span>
+  </div>
+
+  <!-- ===== Connect a phone ===== -->
+  <section class="page on" id="page-connect">
+    <h1>Connect a phone</h1>
+    <p class="lead">Scan this with the phone's camera once. After that the phone is remembered and can open AirBridge from its Home Screen.</p>
+    <div class="card">
+      <div class="qr-wrap">
+        <div class="qr-box" id="qrBox">
+          <img id="qr" alt="QR code for the phone page">
+          <button class="reveal hidden" id="qrReveal">Show for 10 s</button>
+        </div>
+        <div class="qr-side">
+          <p class="url" id="url"></p>
+          <label>Network
+            <select id="address"></select>
+          </label>
+          <p class="hint small" id="awayHint"></p>
+          <button class="link" id="newLink">New link (stops the old one working)</button>
+          <p class="warn hidden" id="uploadError"></p>
+        </div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Remembered phones</h2>
+        <p class="hint small">Remove one to cut it off. It would need the QR code again.</p>
+        <ul id="deviceList"></ul>
+      </div>
+      <div class="card">
+        <h2>Secure connection</h2>
+        <label class="check"><input type="checkbox" id="httpsEnabled"> Offer HTTPS to phones</label>
+        <p class="hint small">Phones install AirBridge's certificate once (the phone page shows how). It encrypts everything and lets the phone page read the phone's clipboard.</p>
+        <p class="hint small" id="tlsInfo"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Mirror iPhone ===== -->
+  <section class="page" id="page-mirror">
+    <div class="page-head">
+      <h1>Mirror iPhone</h1>
+      <label class="switch" title="Screen mirroring on/off"><input type="checkbox" id="receiverEnabled"><span></span></label>
     </div>
     <p class="status"><span class="dot" id="rxDot"></span><span id="rxText">Starting…</span></p>
-    <p class="hint" id="rxHint">On your iPhone or iPad, open Control Centre → <b>Screen Mirroring</b> and pick <b id="nameEcho"></b>.</p>
-    <p class="pin hidden" id="pinRow">PIN: <b id="pinValue"></b> <button class="link" id="newPin">New PIN</button></p>
-
-    <div class="fields">
-      <label>Name shown on iPhone
-        <input id="deviceName" maxlength="60">
-      </label>
-      <label>Sound
-        <select id="audioMode">
-          <option value="pc">Play on this PC</option>
-          <option value="phone">Keep on the phone</option>
-          <option value="off">Mute (phone is silent too)</option>
-        </select>
-      </label>
-      <p class="hint small hidden" id="audioHint">Takes effect the next time the phone starts mirroring.</p>
-      <label id="audioDeviceRow">Play through
-        <select id="audioDevice"></select>
-      </label>
-      <label class="check"><input type="checkbox" id="requirePin"> Ask for a PIN before mirroring</label>
-      <label class="check"><input type="checkbox" id="fullscreen"> Open mirrored screen full-screen</label>
-      <label class="check"><input type="checkbox" id="h265"> Allow 4K / HEVC (needs a recent GPU)</label>
-      <label class="check"><input type="checkbox" id="startWithWindows"> Start AirBridge when I sign in to Windows</label>
-      <p class="hint small hidden" id="startHint">Available in the installed app.</p>
-      <label class="check"><input type="checkbox" id="autoUpdate"> Keep AirBridge up to date automatically</label>
-      <p class="hint small"><span id="updateText"></span> <button class="link" id="checkUpdate">Check now</button></p>
-    </div>
-
-    <div class="capture">
-      <button class="ghost" id="screenshot">Take screenshot</button>
-      <label class="check"><input type="checkbox" id="recordSessions"> Record sessions to video</label>
-    </div>
-    <p class="small" id="captureMsg"></p>
-    <p class="hint small hidden" id="recordHint">Each mirroring session is saved as an MP4 in <b id="recordDir"></b>.
-      <button class="link" id="chooseRecordDir">Change…</button> · <button class="link" id="openRecordDir">Open</button></p>
-
-    <details id="obs">
-      <summary>Stream it in OBS</summary>
-      <label class="check"><input type="checkbox" id="keepWindowOpen"> Keep the mirror window open between sessions</label>
-      <p class="hint small">AirBridge adds a Window Capture source for the mirror to your current OBS scene. In OBS, first turn on Tools → WebSocket Server Settings → Enable WebSocket server.</p>
-      <div class="inline">
-        <input type="password" id="obsPassword" placeholder="OBS WebSocket password" autocomplete="off">
-        <button class="ghost" id="addToObs">Add to OBS</button>
+    <p class="lead" id="rxHint">On your iPhone or iPad, open Control Centre → <b>Screen Mirroring</b> and pick <b id="nameEcho"></b>.</p>
+    <p class="pin hidden" id="pinRow">PIN: <b id="pinValue"></b> <button class="link" id="pinReveal">Show</button> <button class="link" id="newPin">New PIN</button></p>
+    <div class="grid2">
+      <div class="card">
+        <h2>Mirroring</h2>
+        <div class="fields">
+          <label>Name shown on iPhone
+            <input id="deviceName" maxlength="60">
+          </label>
+          <label>Sound
+            <select id="audioMode">
+              <option value="pc">Play on this PC</option>
+              <option value="phone">Keep on the phone</option>
+              <option value="off">Mute (phone is silent too)</option>
+            </select>
+          </label>
+          <p class="hint small hidden" id="audioHint">Takes effect the next time the phone starts mirroring.</p>
+          <label id="audioDeviceRow">Play through
+            <select id="audioDevice"></select>
+          </label>
+          <label class="check"><input type="checkbox" id="requirePin"> Ask for a PIN before mirroring</label>
+          <label class="check"><input type="checkbox" id="fullscreen"> Open mirrored screen full-screen</label>
+          <label class="check"><input type="checkbox" id="h265"> Allow 4K / HEVC (needs a recent GPU)</label>
+        </div>
       </div>
-      <p class="small" id="obsMsg"></p>
-    </details>
-
-    <details>
+      <div class="card">
+        <h2>Capture</h2>
+        <div class="capture">
+          <button class="ghost" id="screenshot">Take screenshot</button>
+          <label class="check"><input type="checkbox" id="recordSessions"> Record sessions to video</label>
+        </div>
+        <p class="small" id="captureMsg"></p>
+        <p class="hint small hidden" id="recordHint">Each mirroring session is saved as an MP4 in <b id="recordDir"></b>.
+          <button class="link" id="chooseRecordDir">Change…</button> · <button class="link" id="openRecordDir">Open</button></p>
+        <h3>Stream it in OBS</h3>
+        <label class="check"><input type="checkbox" id="keepWindowOpen"> Keep the mirror window open between sessions</label>
+        <p class="hint small">Adds a Window Capture of the mirror to your current OBS scene. In OBS, first turn on Tools → WebSocket Server Settings → Enable WebSocket server.</p>
+        <div class="inline">
+          <input type="password" id="obsPassword" placeholder="OBS WebSocket password" autocomplete="off">
+          <button class="ghost" id="addToObs">Add to OBS</button>
+        </div>
+        <p class="small" id="obsMsg"></p>
+      </div>
+    </div>
+    <details class="card" id="logBox">
       <summary>Log</summary>
+      <p class="hint small hidden" id="logHidden">Hidden in streamer mode (it can show phone names and folder paths).</p>
       <pre id="log"></pre>
       <button class="ghost" id="restart">Restart receiver</button>
     </details>
   </section>
 
-  <section class="card" id="files">
-    <div class="card-head">
-      <h2>Receive files from phone</h2>
-      <label class="switch"><input type="checkbox" id="uploadsEnabled"><span></span></label>
+  <!-- ===== Screen & remote ===== -->
+  <section class="page" id="page-screen">
+    <div class="page-head">
+      <h1>Screen &amp; remote</h1>
+      <label class="switch" title="Share this PC's screen to the phone"><input type="checkbox" id="castOn"><span></span></label>
     </div>
-    <div class="qr-wrap">
-      <img id="qr" alt="QR code for the upload page">
-      <div>
-        <p>Scan with the phone's camera, then pick photos or files to send. The phone must be on the same Wi-Fi.</p>
-        <p class="url" id="url"></p>
-        <label class="small">Network
-          <select id="address"></select>
-        </label>
-        <p class="hint small" id="awayHint"></p>
-        <button class="link" id="newLink">New link (stops old one working)</button>
-        <p class="warn hidden" id="uploadError"></p>
+    <p class="status"><span class="dot" id="castDot"></span><span id="castText">Off</span></p>
+    <p class="lead">Show this PC's screen on the phone under <b>Screen &amp; remote</b>. Sharing always starts off when AirBridge starts.</p>
+    <div class="grid2">
+      <div class="card">
+        <h2>Share screen to phone</h2>
+        <div class="fields">
+          <label>Screen
+            <select id="castDisplay"></select>
+          </label>
+          <label>PC sound
+            <select id="castAudio">
+              <option value="off">Don't send</option>
+              <option value="both">Play on PC and phone</option>
+              <option value="phone">Phone only (mute the PC)</option>
+            </select>
+          </label>
+          <label>Picture
+            <select id="castQuality">
+              <option value="sharp">Sharp (text, documents), 30 fps</option>
+              <option value="smooth">Smooth (video, games), 60 fps</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Remote control</h2>
+        <label class="check"><input type="checkbox" id="remoteEnabled"> Allow phone to control mouse &amp; keyboard</label>
+        <p class="hint small" id="remoteHint">The phone gets a trackpad, keyboard, media keys and PC power buttons (lock, sleep, restart, shut down). With screen sharing on, tap, drag and long-press the picture itself. Only phones you've connected can use it; remove one under Connect a phone to cut it off.</p>
       </div>
     </div>
-    <div class="folder">
-      <span>Saving to <b id="uploadDir"></b></span>
-      <span class="actions"><button class="ghost" id="chooseFolder">Change…</button><button class="ghost" id="openFolder">Open</button></span>
-    </div>
-    <h3>Received</h3>
-    <ul id="received"><li class="empty">Nothing yet.</li></ul>
-
-    <h3>Remembered phones</h3>
-    <p class="hint small">A phone is remembered after it scans the QR code once, so it doesn't need the code again. Remove one to cut it off.</p>
-    <ul id="deviceList"></ul>
-
-    <h3>Secure connection</h3>
-    <label class="check small"><input type="checkbox" id="httpsEnabled"> Offer HTTPS to phones (they install AirBridge's certificate once)</label>
-    <p class="hint small" id="tlsInfo"></p>
   </section>
 
-  <section class="card wide" id="castCard">
-    <div class="card-head">
-      <h2>Share PC screen to phone</h2>
-      <label class="switch"><input type="checkbox" id="castOn"><span></span></label>
-    </div>
-    <p class="hint">Reverse mirroring: watch this PC's screen in the phone page's <b>Screen</b> tab. With remote control on, tapping the picture clicks on the PC. Sharing always starts off when AirBridge starts.</p>
-    <p class="status"><span class="dot" id="castDot"></span><span id="castText">Off</span></p>
-    <div class="cols three">
-      <label>Screen
-        <select id="castDisplay"></select>
-      </label>
-      <label>PC sound
-        <select id="castAudio">
-          <option value="off">Don't send</option>
-          <option value="both">Play on PC and phone</option>
-          <option value="phone">Phone only (mute the PC)</option>
-        </select>
-      </label>
-      <label>Picture
-        <select id="castQuality">
-          <option value="sharp">Sharp (text, documents), 30 fps</option>
-          <option value="smooth">Smooth (video, games), 60 fps</option>
-        </select>
-      </label>
-    </div>
-  </section>
-
-  <section class="card wide" id="bridge">
-    <div class="card-head">
-      <h2>Phone ↔ PC</h2>
-      <span class="small muted" id="phoneClients"></span>
-    </div>
-    <p class="hint">Everything here appears on the phone page from the QR code above.</p>
-    <div class="cols">
-      <div class="col">
-        <h3>Send files to phone</h3>
+  <!-- ===== Files ===== -->
+  <section class="page" id="page-files">
+    <h1>Files</h1>
+    <p class="lead">Both ways: phones send files here, and files you drop here appear under <b>Files</b> on the phone.</p>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head">
+          <h2>From the phone</h2>
+          <label class="switch" title="Accept files from phones"><input type="checkbox" id="uploadsEnabled"><span></span></label>
+        </div>
+        <div class="folder">
+          <span>Saving to <b id="uploadDir"></b></span>
+          <span class="actions"><button class="ghost" id="chooseFolder">Change…</button><button class="ghost" id="openFolder">Open</button></span>
+        </div>
+        <h3>Received</h3>
+        <ul id="received"><li class="empty">Nothing yet.</li></ul>
+      </div>
+      <div class="card">
+        <h2>To the phone</h2>
         <div class="drop" id="drop">Drop files here or <button class="link" id="chooseShare">choose…</button><br><span class="small muted">They appear under Files on the phone</span></div>
         <ul id="sharedList"></ul>
       </div>
-      <div class="col">
-        <h3>Clipboard</h3>
-        <button class="ghost" id="sendClip">Send clipboard to phone</button>
+    </div>
+  </section>
+
+  <!-- ===== Clipboard & links ===== -->
+  <section class="page" id="page-clip">
+    <h1>Clipboard &amp; links</h1>
+    <p class="lead">Text and links from the phone land here. On the phone, use <b>Clipboard &amp; links</b>.</p>
+    <div class="grid2">
+      <div class="card">
+        <h2>Clipboard</h2>
+        <button class="ghost" id="sendClip">Send my clipboard to the phone</button>
         <p class="small" id="clipMsg"></p>
-        <label class="check small"><input type="checkbox" id="autoCopyClipboard"> Copy text from the phone automatically</label>
+        <label class="check"><input type="checkbox" id="autoCopyClipboard"> Copy text from the phone automatically</label>
+        <h3>Text from the phone</h3>
         <ul id="phoneTexts"></ul>
       </div>
-      <div class="col">
-        <h3>Links from phone</h3>
-        <label class="check small"><input type="checkbox" id="autoOpenLinks"> Open links straight away</label>
-        <ul id="linkList"><li class="empty">Use “Clipboard & links” on the phone.</li></ul>
-      </div>
-      <div class="col">
-        <h3>Remote control</h3>
-        <label class="check"><input type="checkbox" id="remoteEnabled"> Allow phone to control mouse &amp; keyboard</label>
-        <p class="hint small" id="remoteHint">Use “Screen & remote” on the phone as a trackpad, keyboard and media remote (with the live screen above it when sharing is on). Only phones you've connected can use it. To cut one off, remove it under Remembered phones.</p>
+      <div class="card">
+        <h2>Links</h2>
+        <label class="check"><input type="checkbox" id="autoOpenLinks"> Open links from the phone straight away</label>
+        <h3>Links from the phone</h3>
+        <ul id="linkList"></ul>
       </div>
     </div>
   </section>
-</main>
+
+  <!-- ===== Settings ===== -->
+  <section class="page" id="page-settings">
+    <h1>Settings</h1>
+    <div class="grid2">
+      <div class="card">
+        <h2>Appearance</h2>
+        <div class="fields">
+          <label>Theme
+            <select id="theme">
+              <option value="system">Same as Windows</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          <label>Accent colour
+            <div class="swatches" id="accents" role="radiogroup" aria-label="Accent colour"></div>
+          </label>
+          <p class="hint small">Phones follow these too. Each phone can pick its own theme under the gear icon.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Streamer mode</h2>
+          <label class="switch" title="Streamer mode"><input type="checkbox" id="streamerMode"><span></span></label>
+        </div>
+        <p class="hint small">For streaming or recording your screen. Hides the QR code and link, folder paths (they contain your Windows user name), phone and file names, text and links from phones, the log and the PIN, including in notifications and the tray menu. Click a hidden item to show it for 10 seconds.</p>
+        <label class="check"><input type="checkbox" id="streamerAuto"> Turn on by itself while OBS is running</label>
+        <p class="hint small" id="streamerState"></p>
+        <p class="hint small">Also worth doing: give this PC a name that isn't your real name (iPhones nearby see it), and turn on Do Not Disturb on a phone you mirror on stream.</p>
+      </div>
+      <div class="card">
+        <h2>Start-up and updates</h2>
+        <div class="fields">
+          <label class="check"><input type="checkbox" id="startWithWindows"> Start AirBridge when I sign in to Windows</label>
+          <p class="hint small hidden" id="startHint">Available in the installed app.</p>
+          <label class="check"><input type="checkbox" id="autoUpdate"> Keep AirBridge up to date automatically</label>
+          <p class="hint small"><span id="updateText"></span> <button class="link" id="checkUpdate">Check now</button></p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>About</h2>
+        <p class="hint small">AirBridge is free and open source (GPL-3.0). Screen mirroring uses UxPlay and GStreamer.</p>
+        <button class="link" id="openRepo">github.com/alcxandros/airbridge</button>
+      </div>
+    </div>
+  </section>
+</div>
 <script src="app.js"></script>
 </body>
 </html>

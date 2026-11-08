@@ -510,3 +510,13 @@ test('power actions need remote control and a known action', async () => {
   await srv.stop();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('streamer mode spots OBS in the process list', () => {
+  const { obsInTasklist } = require('../src/streamer');
+  const row = (name) => `"${name}","1234","Console","1","200,000 K"`;
+  assert.equal(obsInTasklist([row('explorer.exe'), row('obs64.exe')].join('\r\n')), true);
+  assert.equal(obsInTasklist(row('obs32.exe')), true);
+  assert.equal(obsInTasklist(row('obs.exe')), true);
+  assert.equal(obsInTasklist([row('explorer.exe'), row('obs-browser-page.exe'), row('jobs64.exe')].join('\r\n')), false);
+  assert.equal(obsInTasklist(''), false);
+});
