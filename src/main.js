@@ -43,7 +43,6 @@ let receiver;
 let phone;
 let helper;
 let uploadError = '';
-let chosenAddress = null;
 let publicNets = [];
 let audioOutputs = [];
 let phoneClients = 0;
@@ -79,7 +78,7 @@ function send(channel, payload) {
 
 function chosenLanAddress() {
   const addrs = lanAddresses();
-  return addrs.find((a) => a.address === chosenAddress) || addrs[0] || null;
+  return addrs.find((a) => a.address === settings.get('phoneAddress')) || addrs[0] || null;
 }
 
 // The QR code always uses plain http: a phone that hasn't installed the local
@@ -173,8 +172,12 @@ async function loadOrCreateCa() {
   if (canEncrypt) settings.update({ caCert: caPem, caKeyEnc: await secrets.encrypt(caKeyPem) });
 }
 
+// Tailscale addresses are left out: the local CA is only allowed to vouch for
+// home-network ranges, and Tailscale traffic is encrypted by Tailscale anyway.
+const certIps = () => lanAddresses().filter((a) => !a.tailscale).map((a) => a.address);
+
 function serverCert() {
-  const ips = lanAddresses().map((a) => a.address);
+  const ips = certIps();
   tlsIps = ips.join(',');
   return tlsCa.issueServerCert({ caKeyPem, caCertPem: caPem, ips: ips.length ? ips : ['192.168.0.1'] });
 }
@@ -182,7 +185,7 @@ function serverCert() {
 // Re-issue the certificate when the PC's addresses change (new Wi-Fi, DHCP).
 function refreshTlsCert() {
   if (!phone || !phone.tlsServer || !caPem) return;
-  const ips = lanAddresses().map((a) => a.address).join(',');
+  const ips = certIps().join(',');
   if (ips === tlsIps) return;
   const c = serverCert();
   phone.updateTls({ key: c.keyPem, cert: c.certPem });
@@ -601,7 +604,10 @@ ipcMain.handle('new-link', () => {
   return snapshot();
 });
 ipcMain.handle('choose-address', (_e, addr) => {
-  if (lanAddresses().some((a) => a.address === addr)) chosenAddress = addr;
+  if (lanAddresses().some((a) => a.address === addr)) {
+    settings.update({ phoneAddress: addr });
+    pushState();
+  }
   return snapshot();
 });
 ipcMain.handle('restart-receiver', () => {

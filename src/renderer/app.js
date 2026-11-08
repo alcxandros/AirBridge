@@ -58,10 +58,20 @@ function render(s) {
   for (const a of up.addresses) {
     const o = document.createElement('option');
     o.value = a.address;
-    o.textContent = `${a.address} (${a.name})`;
+    o.textContent = a.tailscale ? `${a.address} (Tailscale: works at home and away)` : `${a.address} (${a.name})`;
     o.selected = a.address === up.chosenAddress;
     sel.append(o);
   }
+  const ts = up.addresses.find((a) => a.tailscale);
+  const usingTs = ts && ts.address === up.chosenAddress;
+  $('awayHint').innerHTML = '';
+  $('awayHint').append(
+    usingTs
+      ? 'Using Tailscale: phones signed in to the same Tailscale account can connect from anywhere. Scan the QR code again on each phone after switching.'
+      : ts
+        ? 'To use AirBridge away from home, pick the Tailscale address above and scan the QR code again.'
+        : 'Away from home? Install Tailscale (free) on this PC and your phone, sign in to the same account on both, and a Tailscale address will appear above.',
+  );
   $('uploadDir').textContent = st.uploadDir;
 
   const ul = $('received');

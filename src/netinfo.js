@@ -1,20 +1,30 @@
 'use strict';
 const os = require('os');
 
-// Private IPv4 addresses the phone can reach on the local network.
-// Virtual adapters (Hyper-V, WSL, VirtualBox, VPNs) are ranked last.
-function lanAddresses() {
+// Addresses a phone can use to reach this PC: private IPv4 on the local
+// network, plus the Tailscale address (100.64.0.0/10) when Tailscale is running,
+// which also works away from home. Order: real LAN adapters, then Tailscale,
+// then other virtual adapters (Hyper-V, WSL, VirtualBox, VPNs).
+function lanAddresses(ifaces = os.networkInterfaces()) {
   const out = [];
-  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+  for (const [name, addrs] of Object.entries(ifaces)) {
     for (const a of addrs || []) {
       if (a.family !== 'IPv4' || a.internal) continue;
-      if (!isPrivate(a.address)) continue;
-      const virtual = /vethernet|virtual|vmware|vbox|hyper-v|wsl|loopback|tailscale|zerotier|vpn|tap/i.test(name);
-      out.push({ name, address: a.address, virtual });
+      const tailscale = isTailscale(a.address);
+      if (!tailscale && !isPrivate(a.address)) continue;
+      const virtual = !tailscale && /vethernet|virtual|vmware|vbox|hyper-v|wsl|loopback|tailscale|zerotier|vpn|tap/i.test(name);
+      out.push({ name: tailscale ? 'Tailscale' : name, address: a.address, virtual, tailscale });
     }
   }
-  out.sort((x, y) => Number(x.virtual) - Number(y.virtual) || rank(x.address) - rank(y.address));
+  const group = (a) => (a.tailscale ? 1 : a.virtual ? 2 : 0);
+  out.sort((x, y) => group(x) - group(y) || rank(x.address) - rank(y.address));
   return out;
+}
+
+/** Tailscale hands out addresses from the carrier-grade NAT range 100.64.0.0/10. */
+function isTailscale(ip) {
+  const [a, b] = String(ip).split('.').map(Number);
+  return a === 100 && b >= 64 && b <= 127;
 }
 
 function isPrivate(ip) {
@@ -35,11 +45,12 @@ function publicNetworks() {
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', 'Get-NetConnectionProfile | Where-Object NetworkCategory -eq Public | ForEach-Object Name'],
+      // Tailscale's adapter is often Public; AirBridge has its own firewall rule for it.
+      ['-NoProfile', '-NonInteractive', '-Command', "Get-NetConnectionProfile | Where-Object { $_.NetworkCategory -eq 'Public' -and $_.InterfaceAlias -notlike '*Tailscale*' } | ForEach-Object Name"],
       { windowsHide: true, timeout: 8000 },
       (err, stdout) => resolve(err ? [] : stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)),
     );
   });
 }
 
-module.exports = { lanAddresses, isPrivate, publicNetworks };
+module.exports = { lanAddresses, isPrivate, isTailscale, publicNetworks };

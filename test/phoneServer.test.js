@@ -467,3 +467,25 @@ test('settings reject unknown values for enum settings', () => {
   assert.equal(s.update({ castQuality: 'ultra' }).castQuality, 'sharp');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// ---- away from home (Tailscale) ----
+const { lanAddresses, isTailscale } = require('../src/netinfo');
+
+test('Tailscale addresses are offered after real LAN adapters, before other virtual ones', () => {
+  assert.equal(isTailscale('100.101.102.103'), true);
+  assert.equal(isTailscale('100.63.0.1'), false); // just outside 100.64.0.0/10
+  assert.equal(isTailscale('100.128.0.1'), false);
+  const v4 = (address) => ({ family: 'IPv4', internal: false, address });
+  const list = lanAddresses({
+    'vEthernet (WSL)': [v4('172.20.0.1')],
+    Tailscale: [v4('100.90.1.2')],
+    'Ethernet 2': [v4('192.168.1.136')],
+    Public: [v4('8.8.8.8')],
+    Loopback: [{ family: 'IPv4', internal: true, address: '127.0.0.1' }],
+  });
+  assert.deepEqual(list.map((a) => [a.address, a.name, a.tailscale]), [
+    ['192.168.1.136', 'Ethernet 2', false],
+    ['100.90.1.2', 'Tailscale', true],
+    ['172.20.0.1', 'vEthernet (WSL)', false],
+  ]);
+});

@@ -30,6 +30,7 @@ const DEFAULTS = {
   castAudio: 'off', // 'off' | 'both' (PC and phone) | 'phone' (phone only, PC muted)
   castQuality: 'sharp', // 'sharp' (text) | 'smooth' (video, games)
   castDisplay: '', // Electron display id; '' = main display
+  phoneAddress: '', // address in the QR code; '' = best local network address
   h265: false,
   uploadsEnabled: true,
   uploadDir: path.join(os.homedir(), 'Downloads', 'AirBridge'),
