@@ -76,6 +76,8 @@ class Receiver extends EventEmitter {
       env.GST_PLUGIN_PATH_1_0 = '';
       env.GST_PLUGIN_SCANNER_1_0 = path.join(root, 'libexec', 'gstreamer-1.0', IS_WIN ? 'gst-plugin-scanner.exe' : 'gst-plugin-scanner');
       env.GST_REGISTRY_1_0 = path.join(this.dataDir, 'gst-registry.bin');
+      // Scan plugins in-process: the separate scanner is a console exe and would flash a window.
+      env.GST_REGISTRY_FORK = 'no';
     }
     env.HOME = env.HOME || this.dataDir;
     return env;
@@ -112,7 +114,10 @@ class Receiver extends EventEmitter {
     this.log(`> ${EXE} ${args.join(' ')}`);
     this.setState('starting');
 
-    const proc = spawn(this.bundle.exe, args, { env: this.env(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    // windowsHide must stay false: Windows applies it to UxPlay's first window,
+    // which is the mirrored screen. The bundled uxplay.exe is GUI-subsystem, so
+    // no console appears anyway.
+    const proc = spawn(this.bundle.exe, args, { env: this.env(), windowsHide: false, stdio: ['ignore', 'pipe', 'pipe'] });
     this.proc = proc;
 
     const onLine = (line) => {

@@ -34,7 +34,9 @@ git -C "$SRC" fetch --quiet origin
 git -C "$SRC" -c advice.detachedHead=false checkout --quiet "$UXPLAY_REF"
 
 echo "==> Building"
-cmake -S "$SRC" -B "$SRC/build" -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
+# -mwindows: GUI-subsystem exe, so no console window appears and the app can
+# launch it without the "hide window" flag (which would also hide the video window).
+cmake -S "$SRC" -B "$SRC/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-mwindows >/dev/null
 cmake --build "$SRC/build"
 
 echo "==> Assembling bundle in vendor/uxplay"
