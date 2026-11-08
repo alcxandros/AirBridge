@@ -40,6 +40,9 @@ function buildArgs(settings, keyFile) {
     args.push('-as', /^\{[\w.]+\}\.\{[0-9a-f-]+\}$/i.test(dev) ? `wasapisink device="${dev}"` : 'wasapisink');
   }
   if (settings.keepWindowOpen) args.push('-nc');
+  // UxPlay writes "<prefix>.<n>.<codecs>.mp4", one file per mirroring session.
+  // Forward slashes: backslashes are escape characters in GStreamer pipeline strings.
+  if (settings.recordSessions && settings.recordPrefix) args.push('-mp4', settings.recordPrefix.replace(/\\/g, '/'));
   if (settings.fullscreen) args.push('-fs');
   if (settings.h265) args.push('-h265');
   if (settings.requirePin && /^\d{4}$/.test(settings.pin || '')) args.push('-pin', settings.pin);
@@ -121,7 +124,19 @@ class Receiver extends EventEmitter {
     if (this.proc || !this.wantRunning) return;
 
     fs.mkdirSync(this.dataDir, { recursive: true });
-    const args = buildArgs(settings, path.join(this.dataDir, 'uxplay-key.pem'));
+    let run = settings;
+    if (settings.recordSessions && settings.recordDir) {
+      try {
+        fs.mkdirSync(settings.recordDir, { recursive: true });
+        const d = new Date();
+        const p2 = (n) => String(n).padStart(2, '0');
+        const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`;
+        run = { ...settings, recordPrefix: path.join(settings.recordDir, `AirBridge ${stamp}`) };
+      } catch (e) {
+        this.log(`cannot create recordings folder: ${e.message}`);
+      }
+    }
+    const args = buildArgs(run, path.join(this.dataDir, 'uxplay-key.pem'));
     this.log(`> ${EXE} ${args.join(' ')}`);
     this.setState('starting');
 
@@ -134,6 +149,12 @@ class Receiver extends EventEmitter {
     const onLine = (line) => {
       this.log(line);
       if (/Initialized server socket|using network ports/i.test(line) && this.state === 'starting') this.setState('running');
+      if (/AirBridge: all clients disconnected/.test(line) && this.client) {
+        this.client = null;
+        this.emit('status', this.status());
+      }
+      const rec = line.match(/Started recording to: (.+)$/);
+      if (rec) this.emit('recording', rec[1].trim());
       const m = line.match(/connection request from (.+?) \((.+?)\)/i);
       if (m) {
         this.client = { name: m[1], model: m[2], at: Date.now() };

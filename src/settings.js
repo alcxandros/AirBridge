@@ -18,6 +18,14 @@ const DEFAULTS = {
   remoteEnabled: false,
   autoOpenLinks: true,
   autoCopyClipboard: true,
+  devices: [], // paired phones: { id, name, hash, created, lastSeen } (see devices.js)
+  startWithWindows: false,
+  recordSessions: false,
+  recordDir: path.join(os.homedir(), 'Videos', 'AirBridge'),
+  screenshotDir: path.join(os.homedir(), 'Pictures', 'AirBridge'),
+  httpsEnabled: true,
+  caKeyEnc: '', // local CA private key (PEM), encrypted with safeStorage
+  caCert: '', // local CA certificate (PEM)
   h265: false,
   uploadsEnabled: true,
   uploadDir: path.join(os.homedir(), 'Downloads', 'AirBridge'),

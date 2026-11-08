@@ -16,6 +16,7 @@ Full licence texts ship in `resources/uxplay/licenses/`.
 | busboy | multipart upload parsing | MIT | https://github.com/mscdex/busboy |
 | qrcode | QR code generation | MIT | https://github.com/soldair/node-qrcode |
 | ws | WebSocket server and client (phone page, OBS) | MIT | https://github.com/websockets/ws |
+| node-forge | X.509 certificates for the local HTTPS CA | BSD-3-Clause (dual BSD-3-Clause / GPL-2.0; used under BSD-3-Clause) | https://github.com/digitalbazaar/forge |
 | MinGW-w64 runtime (statically linked into `airbridge-helper.exe`) | C/C++ runtime | ZPL-2.1 / MIT-style, GCC Runtime Library Exception | https://www.mingw-w64.org |
 
 OBS Studio is not bundled. AirBridge only talks to an OBS you've installed, through

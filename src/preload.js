@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld('airbridge', {
   copyText: (t) => ipcRenderer.invoke('copy-text', t),
   openLink: (u) => ipcRenderer.invoke('open-link', u),
   addToObs: (pw) => ipcRenderer.invoke('add-to-obs', pw),
+  forgetDevice: (id) => ipcRenderer.invoke('forget-device', id),
+  screenshot: () => ipcRenderer.invoke('screenshot'),
+  chooseRecordFolder: () => ipcRenderer.invoke('choose-record-folder'),
+  openRecordFolder: () => ipcRenderer.invoke('open-record-folder'),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
   onLog: (cb) => ipcRenderer.on('log', (_e, l) => cb(l)),
 });

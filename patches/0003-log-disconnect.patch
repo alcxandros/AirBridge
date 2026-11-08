@@ -1,0 +1,12 @@
+diff --git a/uxplay.cpp b/uxplay.cpp
+index e6181e7..6562211 100644
+--- a/uxplay.cpp
++++ b/uxplay.cpp
+@@ -2737,6 +2737,7 @@ extern "C" void conn_destroy (void *cls) {
+     open_connections--;
+     LOGD("Open connections: %i", open_connections);
+     if (open_connections == 0) {
++        LOGI("AirBridge: all clients disconnected"); /* AirBridge: lets the app clear "Connected" */
+         remote_clock_offset = 0;
+         if (use_audio) {
+             audio_renderer_stop();

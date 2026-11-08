@@ -45,6 +45,22 @@ class Helper {
     });
   }
 
+  /** Visible windows of a process: [{ hwnd, width, height, cls }] */
+  windowsOf(pid) {
+    if (!this.exe || !pid) return Promise.resolve([]);
+    return new Promise((resolve) => {
+      execFile(this.exe, ['windows', String(pid)], { windowsHide: true, timeout: 5000 }, (err, stdout) =>
+        resolve(
+          String(stdout || '')
+            .split(/\r?\n/)
+            .map((l) => l.split('\t'))
+            .filter((p) => p.length >= 4)
+            .map(([hwnd, w, h, cls]) => ({ hwnd, width: Number(w), height: Number(h), cls })),
+        ),
+      );
+    });
+  }
+
   /** Send one command line to the long-running input process (started on demand). */
   input(line) {
     if (!this.exe) return;

@@ -1,0 +1,16 @@
+diff --git a/renderers/mux_renderer.c b/renderers/mux_renderer.c
+index 82fcc02..e084c80 100644
+--- a/renderers/mux_renderer.c
++++ b/renderers/mux_renderer.c
+@@ -152,8 +152,10 @@ void mux_renderer_start(void) {
+     g_string_append(launch,
+                     "mp4mux name=mux fragment-duration=2000 "
+                     "fragment-mode=first-moov-then-finalise "
+-                    "! filesink name=filesink location=");
++                    "! filesink name=filesink location=\"");
++    /* AirBridge: quote the path so folders with spaces work */
+     g_string_append(launch, filename->str);
++    g_string_append(launch, "\"");
+ 
+     logger_log(logger, LOGGER_DEBUG, "created Mux pipeline: %s", launch->str);
+ 

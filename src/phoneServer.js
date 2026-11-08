@@ -6,6 +6,9 @@
 //   POST /api/clipboard    phone -> PC text
 //   POST /api/link         phone -> PC: open a URL in the PC's browser
 //   GET  /api/state        shared files, PC clipboard text, enabled features
+//   GET  /api/whoami       session or paired device; HTTPS port
+//   POST /api/pair         QR session -> long-lived device token (remembered phone)
+//   GET  /airbridge-ca.crt local CA for HTTPS (installed on the phone once)
 //   WS   /ws               live state pushes; remote mouse/keyboard input
 
 const http = require('http');
@@ -140,32 +143,59 @@ class PhoneServer extends EventEmitter {
    * @param {() => ({text,at}|null)} [opts.getClip] PC clipboard text sent to the phone
    * @param {number} [opts.maxFileBytes]       per-file size cap
    * @param {string} [opts.deviceName]         shown on the phone page
+   * @param {object} [opts.devices]            DeviceStore (verify/pair/touch) for remembered phones
+   * @param {() => (string|null)} [opts.getCaCert] local CA certificate (PEM) offered to phones
+   * @param {Buffer} [opts.icon]               PNG for the home-screen icon
+   *
+   * Two kinds of token are accepted: the QR "session" token (changes on restart
+   * and with New link) and per-phone device tokens issued by /api/pair.
    *
    * Events: 'file' (saved upload), 'clipboard' ({text}), 'link' ({url}),
-   *         'input' (helper command line), 'clients' (number of open phone pages)
+   *         'input' (helper command line), 'clients' (number of open phone pages),
+   *         'paired' ({id, name})
    */
   constructor(opts) {
     super();
-    this.opts = { remoteEnabled: () => false, getShared: () => [], getClip: () => null, ...opts };
+    this.opts = { remoteEnabled: () => false, getShared: () => [], getClip: () => null, getCaCert: () => null, devices: null, ...opts };
     this.token = crypto.randomBytes(16).toString('hex');
     this.server = null;
+    this.tlsServer = null;
     this.wss = null;
     this.port = null;
+    this.tlsPort = null;
+  }
+
+  /** Who is calling: { kind: 'session' } | { kind: 'device', id, name } | null */
+  auth(t) {
+    t = String(t || '');
+    if (safeEqual(t, this.token)) return { kind: 'session' };
+    const d = this.opts.devices && this.opts.devices.verify(t);
+    if (d) {
+      this.opts.devices.touch(d.id);
+      return { kind: 'device', id: d.id, name: d.name };
+    }
+    return null;
   }
 
   rotateToken() {
     this.token = crypto.randomBytes(16).toString('hex');
-    // Old pages must stop working immediately, including live connections.
-    if (this.wss) for (const ws of this.wss.clients) ws.close(4001, 'token rotated');
+    // Pages still on the old QR link stop working immediately; paired phones stay.
+    if (this.wss) for (const ws of this.wss.clients) if (ws.who && ws.who.kind === 'session') ws.close(4001, 'token rotated');
     return this.token;
+  }
+
+  /** Disconnect a phone that was just forgotten. */
+  closeDevice(id) {
+    if (!this.wss) return;
+    for (const ws of this.wss.clients) if (ws.who && ws.who.id === id) ws.close(4001, 'device forgotten');
   }
 
   start(port = 0, host = '0.0.0.0') {
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => this.handle(req, res));
-      this.wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+      if (!this.wss) this.wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
       this.server.on('upgrade', (req, socket, head) => this.upgrade(req, socket, head));
-      this.server.on('error', reject);
+      this.server.once('error', reject);
       this.server.listen(port, host, () => {
         this.port = this.server.address().port;
         resolve(this.port);
@@ -173,16 +203,42 @@ class PhoneServer extends EventEmitter {
     });
   }
 
+  /** Also serve the same page and API over HTTPS (cert from the local CA). */
+  startTls(port, { key, cert }, host = '0.0.0.0') {
+    const https = require('https');
+    return new Promise((resolve, reject) => {
+      this.tlsServer = https.createServer({ key, cert }, (req, res) => this.handle(req, res));
+      if (!this.wss) this.wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+      this.tlsServer.on('upgrade', (req, socket, head) => this.upgrade(req, socket, head));
+      this.tlsServer.on('tlsClientError', () => {}); // phones without the CA yet: expected
+      this.tlsServer.once('error', reject);
+      this.tlsServer.listen(port, host, () => {
+        this.tlsPort = this.tlsServer.address().port;
+        resolve(this.tlsPort);
+      });
+    });
+  }
+
+  /** Swap in a new certificate (e.g. after the PC's IP address changed). */
+  updateTls({ key, cert }) {
+    if (this.tlsServer) this.tlsServer.setSecureContext({ key, cert });
+  }
+
   stop() {
-    return new Promise((resolve) => {
-      if (!this.server) return resolve();
+    const close = (srv) =>
+      new Promise((resolve) => {
+        if (!srv) return resolve();
+        srv.close(() => resolve());
+        srv.closeAllConnections?.();
+      });
+    if (this.wss) {
       for (const ws of this.wss.clients) ws.terminate();
       this.wss.close();
-      this.server.close(() => resolve());
-      this.server.closeAllConnections?.();
-      this.server = null;
-      this.wss = null;
-    });
+    }
+    const done = Promise.all([close(this.server), close(this.tlsServer)]);
+    this.server = this.tlsServer = this.wss = null;
+    this.tlsPort = null;
+    return done;
   }
 
   state() {
@@ -208,11 +264,13 @@ class PhoneServer extends EventEmitter {
 
   upgrade(req, socket, head) {
     const url = new URL(req.url, 'http://local');
-    if (url.pathname !== '/ws' || !safeEqual(url.searchParams.get('t') || '', this.token)) {
+    const who = url.pathname === '/ws' ? this.auth(url.searchParams.get('t')) : null;
+    if (!who) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       return socket.destroy();
     }
     this.wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.who = who;
       this.emit('clients', this.clientCount());
       ws.send(JSON.stringify({ type: 'state', ...this.state() }));
       ws.on('message', (data) => {
@@ -241,13 +299,52 @@ class PhoneServer extends EventEmitter {
       res.end(body);
     };
 
-    if (!safeEqual(url.searchParams.get('t') || '', this.token)) {
-      return send(403, 'This link has expired. Scan the QR code on your computer again.');
-    }
-
+    // The page itself holds no secrets; it signs in with the token from its URL
+    // or from storage, and explains what to do when that's no longer valid.
     if (req.method === 'GET' && url.pathname === '/') {
       const html = PAGE.replace(/__DEVICE__/g, () => escapeHtml(this.opts.deviceName || 'your computer'));
       return send(200, html, 'text/html; charset=utf-8');
+    }
+    if (req.method === 'GET' && (url.pathname === '/icon.png' || url.pathname === '/apple-touch-icon.png') && this.opts.icon) {
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' });
+      return res.end(this.opts.icon);
+    }
+    // Lets the http page check whether this phone already trusts the local CA.
+    if (req.method === 'GET' && url.pathname === '/api/ping') {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
+      return res.end('{"ok":true}');
+    }
+
+    const who = this.auth(url.searchParams.get('t'));
+    if (!who) {
+      return send(403, JSON.stringify({ error: 'expired' }), 'application/json');
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/whoami') {
+      return send(200, JSON.stringify({ kind: who.kind, name: who.name || null, tlsPort: this.tlsPort, hasCa: !!this.opts.getCaCert() }), 'application/json');
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/pair') {
+      if (who.kind !== 'session' || !this.opts.devices) return send(400, JSON.stringify({ error: 'Already paired.' }), 'application/json');
+      return readJson(req)
+        .then((body) => {
+          const d = this.opts.devices.pair(body.name);
+          this.emit('paired', { id: d.id, name: d.name });
+          send(200, JSON.stringify(d), 'application/json');
+        })
+        .catch(() => send(400, JSON.stringify({ error: 'Bad request.' }), 'application/json'));
+    }
+
+    if (req.method === 'GET' && url.pathname === '/airbridge-ca.crt') {
+      const pem = this.opts.getCaCert();
+      if (!pem) return send(404, 'No certificate yet.');
+      const der = Buffer.from(pem.replace(/-----[^-]+-----|\s/g, ''), 'base64');
+      res.writeHead(200, {
+        'Content-Type': 'application/x-x509-ca-cert',
+        'Content-Disposition': 'attachment; filename="AirBridge-local-CA.crt"',
+        'Cache-Control': 'no-store',
+      });
+      return res.end(der);
     }
 
     if (req.method === 'POST' && url.pathname === '/upload') {

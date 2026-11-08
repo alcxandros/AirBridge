@@ -36,6 +36,7 @@ function render(s) {
   $('keepWindowOpen').checked = st.keepWindowOpen;
   $('obsPassword').placeholder = st.hasObsPassword ? 'Saved password (leave empty to reuse)' : 'OBS WebSocket password (if set)';
   renderBridge(s);
+  renderExtras(s);
   $('requirePin').checked = st.requirePin;
   $('fullscreen').checked = st.fullscreen;
   $('h265').checked = st.h265;
@@ -142,6 +143,45 @@ function renderBridge(s) {
   if (!s.remoteAvailable) $('remoteHint').textContent = 'Remote control needs the AirBridge helper (Windows build).';
 }
 
+function ago(t) {
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 90) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(t).toLocaleDateString();
+}
+
+function renderExtras(s) {
+  const st = s.settings;
+  // Start with Windows
+  $('startWithWindows').checked = st.startWithWindows;
+  $('startWithWindows').disabled = !s.canStartWithWindows;
+  $('startHint').classList.toggle('hidden', s.canStartWithWindows);
+  // Capture
+  $('recordSessions').checked = st.recordSessions;
+  $('recordHint').classList.toggle('hidden', !st.recordSessions);
+  $('recordDir').textContent = st.recordDir;
+  $('screenshot').disabled = !(s.receiver.state === 'running' && s.receiver.client);
+  $('screenshot').title = $('screenshot').disabled ? 'Start mirroring from the phone first' : 'Save a PNG of the mirrored screen';
+  // Devices
+  fill(
+    $('deviceList'),
+    s.devices
+      .slice()
+      .sort((a, b) => b.lastSeen - a.lastSeen)
+      .map((d) => li(`${d.name} · last seen ${ago(d.lastSeen)}`, [['Remove', () => api.forgetDevice(d.id).then(render)]])),
+    'None yet.',
+  );
+  // HTTPS
+  $('httpsEnabled').checked = st.httpsEnabled;
+  const t = s.tls;
+  $('tlsInfo').textContent = t.error
+    ? t.error
+    : t.enabled
+      ? `HTTPS on port ${t.port}. The phone page walks through installing the certificate. Its fingerprint starts ${t.fingerprint.slice(0, 23)}.`
+      : 'Off. Phones use plain HTTP on your home network.';
+}
+
 const set = (patch) => api.updateSettings(patch).then(render);
 
 $('receiverEnabled').onchange = (e) => set({ receiverEnabled: e.target.checked });
@@ -178,7 +218,29 @@ $('addToObs').onclick = async () => {
 $('autoCopyClipboard').onchange = (e) => set({ autoCopyClipboard: e.target.checked });
 $('autoOpenLinks').onchange = (e) => set({ autoOpenLinks: e.target.checked });
 $('remoteEnabled').onchange = (e) => set({ remoteEnabled: e.target.checked });
-$('chooseShare').onclick = () => api.chooseShareFiles().then(render);
+$('startWithWindows').onchange = (e) => set({ startWithWindows: e.target.checked });
+$('httpsEnabled').onchange = (e) => set({ httpsEnabled: e.target.checked });
+$('recordSessions').onchange = (e) => {
+  // Turning recording on or off restarts the receiver, which drops a live session.
+  if (state && state.receiver.client && !confirm('This restarts the receiver, so the phone will stop mirroring. Start mirroring again afterwards. Continue?')) {
+    e.target.checked = !e.target.checked;
+    return;
+  }
+  set({ recordSessions: e.target.checked });
+};
+$('chooseRecordDir').onclick = () => api.chooseRecordFolder().then(render);
+$('openRecordDir').onclick = () => api.openRecordFolder();
+$('screenshot').onclick = async () => {
+  const res = await api.screenshot();
+  const msg = $('captureMsg');
+  msg.className = res.ok ? 'small ok' : 'small err';
+  msg.textContent = res.ok ? `Saved ${res.file}` : res.error;
+  if (res.ok) {
+    msg.style.cursor = 'pointer';
+    msg.onclick = () => api.showFile(res.file);
+  }
+};
+$('chooseShare').onclick =() => api.chooseShareFiles().then(render);
 $('sendClip').onclick = async () => {
   const res = await api.sendClipboard();
   $('clipMsg').className = res.ok ? 'small ok' : 'small err';

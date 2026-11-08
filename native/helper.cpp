@@ -3,6 +3,7 @@
 //   airbridge-helper audio     list active audio outputs: "<*| >\t<id>\t<name>" per line
 //                              ('*' marks the default device; id is IMMDevice::GetId,
 //                              which is what GStreamer's wasapisink "device" expects)
+//   airbridge-helper windows <pid>  list that process's visible windows (for screenshots)
 //   airbridge-helper input     read input commands from stdin, one per line:
 //       m <dx> <dy>            relative mouse move
 //       d <l|r|m> / u <l|r|m>  button down / up
@@ -162,8 +163,23 @@ static int inputLoop() {
   return 0;
 }
 
+// Visible top-level windows of a process: "<hwnd>\t<client w>\t<client h>\t<class>"
+// (used to find UxPlay's mirror window for screenshots).
+static BOOL CALLBACK enumWin(HWND h, LPARAM pid) {
+  DWORD owner = 0;
+  GetWindowThreadProcessId(h, &owner);
+  if (owner != (DWORD)pid || !IsWindowVisible(h)) return TRUE;
+  RECT r;
+  GetClientRect(h, &r);
+  char cls[128] = "";
+  GetClassNameA(h, cls, sizeof cls);
+  printf("%llu\t%ld\t%ld\t%s\n", (unsigned long long)(ULONG_PTR)h, r.right - r.left, r.bottom - r.top, cls);
+  return TRUE;
+}
+
 int main(int argc, char **argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);
+  if (argc >= 3 && !strcmp(argv[1], "windows")) return EnumWindows(enumWin, (LPARAM)strtoul(argv[2], nullptr, 10)) ? 0 : 1;
   if (argc >= 2 && !strcmp(argv[1], "audio")) return listAudio();
   if (argc >= 2 && !strcmp(argv[1], "input")) return inputLoop();
   fprintf(stderr, "usage: airbridge-helper audio | input\n");

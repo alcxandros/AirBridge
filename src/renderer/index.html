@@ -44,7 +44,17 @@
       <label class="check"><input type="checkbox" id="requirePin"> Ask for a PIN before mirroring</label>
       <label class="check"><input type="checkbox" id="fullscreen"> Open mirrored screen full-screen</label>
       <label class="check"><input type="checkbox" id="h265"> Allow 4K / HEVC (needs a recent GPU)</label>
+      <label class="check"><input type="checkbox" id="startWithWindows"> Start AirBridge when I sign in to Windows</label>
+      <p class="hint small hidden" id="startHint">Available in the installed app.</p>
     </div>
+
+    <div class="capture">
+      <button class="ghost" id="screenshot">Take screenshot</button>
+      <label class="check"><input type="checkbox" id="recordSessions"> Record sessions to video</label>
+    </div>
+    <p class="small" id="captureMsg"></p>
+    <p class="hint small hidden" id="recordHint">Each mirroring session is saved as an MP4 in <b id="recordDir"></b>.
+      <button class="link" id="chooseRecordDir">Change…</button> · <button class="link" id="openRecordDir">Open</button></p>
 
     <details id="obs">
       <summary>Stream it in OBS</summary>
@@ -87,6 +97,14 @@
     </div>
     <h3>Received</h3>
     <ul id="received"><li class="empty">Nothing yet.</li></ul>
+
+    <h3>Remembered phones</h3>
+    <p class="hint small">A phone is remembered after it scans the QR code once, so it doesn't need the code again. Remove one to cut it off.</p>
+    <ul id="deviceList"></ul>
+
+    <h3>Secure connection</h3>
+    <label class="check small"><input type="checkbox" id="httpsEnabled"> Offer HTTPS to phones (they install AirBridge's certificate once)</label>
+    <p class="hint small" id="tlsInfo"></p>
   </section>
 
   <section class="card wide" id="bridge">
@@ -116,7 +134,7 @@
       <div class="col">
         <h3>Remote control</h3>
         <label class="check"><input type="checkbox" id="remoteEnabled"> Allow phone to control mouse &amp; keyboard</label>
-        <p class="hint small" id="remoteHint">Use the phone's Remote tab as a trackpad, keyboard and media remote. Only phones with the current QR link can connect. Use “New link” to cut them off.</p>
+        <p class="hint small" id="remoteHint">Use the phone's Remote tab as a trackpad, keyboard and media remote. Only phones you've connected can use it. To cut one off, remove it under Remembered phones.</p>
       </div>
     </div>
   </section>

@@ -5,8 +5,11 @@ that needs nothing installed on the phone.
 
 1. **Screen mirroring and audio from iPhone, iPad and Mac.** Your PC shows up in
    Control Centre → *Screen Mirroring*, just like an Apple TV. You can choose where the
-   sound goes (see below), and add the mirror to OBS in one click.
-2. **Phone page from a QR code** (iPhone and Android, in the browser):
+   sound goes (see below), take screenshots, record sessions to MP4, and add the mirror
+   to OBS in one click.
+2. **Phone page from a QR code** (iPhone and Android, in the browser). You scan the code
+   once: after that the phone is remembered and can live on its Home Screen like an app.
+   HTTPS is optional:
    - **Send:** photos and files from the phone land in a folder on the PC.
    - **Get:** files you drop into AirBridge on the PC can be downloaded on the phone.
    - **Clipboard:** text from the phone is copied on the PC, and you can push the PC's
@@ -66,6 +69,49 @@ On those systems the remote control and output picker aren't available.
   on an iPhone (November 2026). This relies on undocumented iOS behaviour, so a future
   iOS update could change it. Start mirroring again after switching modes.
 
+### Remembered phones and HTTPS
+
+- **Pairing.** The QR link carries a short-lived *session* token. It changes when
+  AirBridge restarts or you press **New link**. On first open, the page swaps it for
+  the phone's own *device* token (`POST /api/pair`) and keeps that token in the address
+  bar and in local storage. *Add to Home Screen* then saves a link that keeps working.
+  The PC stores only SHA-256 hashes of device tokens. **Remembered phones** in the app
+  lists them with "last seen", and **Remove** disconnects one immediately. **New link**
+  only affects the QR code, not remembered phones.
+- **HTTPS (optional).** AirBridge creates its own small certificate authority (CA)
+  (`src/tls.js`). Its key is stored encrypted with Windows DPAPI. It issues a
+  certificate for the PC's LAN addresses and `<pc-name>.local`, and serves the page over
+  HTTPS on the next port (8766). The phone page shows the steps to install and trust
+  the CA once. After that it switches to HTTPS by itself, which also enables
+  **Send my phone's clipboard**. The CA is **name-constrained** to `10/8`, `172.16/12`,
+  `192.168/16` and `.local`, so even a leaked CA key couldn't be used to impersonate a
+  real website to the phone. On iPhone, set up HTTPS *before* adding the page to the
+  Home Screen, because a Home Screen app can't move from the `http://` address to the
+  `https://` one.
+- The link uses the PC's IP address. If your router gives the PC a new address, scan
+  the QR code again, or give the PC a fixed address (DHCP reservation) in your router.
+
+### Screenshots and recording
+
+- **Take screenshot** (in the app or the tray) saves a PNG of the mirror window to
+  `Pictures\AirBridge`. It finds UxPlay's window through the helper and captures it with
+  Electron's `desktopCapturer`, so the window must not be minimised.
+- **Record sessions to video** passes `-mp4` to UxPlay. Each mirroring session becomes
+  `Videos\AirBridge\AirBridge <date time>.<n>.<codecs>.mp4`. You can change the folder.
+  UxPlay can only start recording when it launches, so switching this on or off
+  restarts the receiver (the app asks first if a phone is mirroring). A small UxPlay
+  patch (`patches/0002`) quotes the path so folders with spaces work.
+
+### Tray and startup
+
+- **Start AirBridge when I sign in to Windows** (installed app only) starts it hidden
+  in the tray.
+- The tray menu shows the mirroring status ("ready" or "connected to …"). From it you
+  can turn mirroring on or off, take a screenshot, turn recording on or off, send the
+  clipboard to the phone, re-copy recent text from the phone, open recent files, and
+  open the QR code. `patches/0003` makes UxPlay log disconnects, so the status clears
+  when the phone stops mirroring.
+
 ### Streaming in OBS
 
 Open **Stream it in OBS** in the Screen mirroring card and click **Add to OBS**. AirBridge
@@ -87,9 +133,9 @@ Renderer`, set the capture method to *Windows 10 (1903 and up)*, and tick *Clien
   substitute.
 - YouTube-style "AirPlay video" (HLS URL casting) isn't bundled yet. That needs
   GStreamer's HTTP/TLS plugins. Mirroring and audio streaming work.
-- The phone page runs over plain HTTP on your LAN, so the phone's browser blocks some
-  features. For example, the page can't read the phone's clipboard by itself, so you
-  paste into the Clipboard tab.
+- Without the optional HTTPS setup, the phone page runs over plain HTTP on your LAN, so
+  the phone's browser blocks some features. For example, the page can't read the
+  phone's clipboard by itself, so you paste into the Clipboard tab.
 
 ## Use it
 
@@ -99,8 +145,9 @@ Renderer`, set the capture method to *Windows 10 (1903 and up)*, and tick *Clien
 2. Keep the PC and phone on the same Wi-Fi, and set that network to **Private** in Windows.
 3. iPhone: Control Centre → Screen Mirroring → pick your PC. Close the app window to
    keep it running in the tray.
-4. Phone ↔ PC: scan the QR code in the app with the phone camera. Tip: in Safari, use
-   Share → *Add to Home Screen* so it opens like an app. Re-scan if you press **New link**.
+4. Phone ↔ PC: scan the QR code in the app with the phone camera, once. Optionally
+   follow the on-page steps for HTTPS, then use Share → *Add to Home Screen* so it opens
+   like an app.
 
 ## Build from source (Windows)
 

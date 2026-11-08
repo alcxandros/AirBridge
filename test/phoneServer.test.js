@@ -44,16 +44,17 @@ test('sanitizeFilename strips paths and reserved names', () => {
   assert.equal(sanitizeFilename('trailing. '), 'trailing');
 });
 
-test('page and upload require the token', async () => {
+test('the page loads without a token, but every API needs one', async () => {
   await withServer(async ({ srv, base }) => {
-    assert.equal((await fetch(`${base}/`)).status, 403);
-    assert.equal((await fetch(`${base}/?t=wrong`)).status, 403);
-    const page = await fetch(`${base}/?t=${srv.token}`);
+    const page = await fetch(`${base}/`);
     assert.equal(page.status, 200);
-    const html = await page.text();
-    assert.match(html, /Test &lt;PC&gt;/);
+    assert.match(await page.text(), /Test &lt;PC&gt;/);
+    for (const p of ['/api/state', '/api/whoami', '/airbridge-ca.crt', '/dl/aaaaaaaaaaaaaaaa']) {
+      assert.equal((await fetch(`${base}${p}?t=wrong`)).status, 403, p);
+    }
     const up = await fetch(`${base}/upload?t=bad`, { method: 'POST', body: form([['a.txt', 'x']]) });
     assert.equal(up.status, 403);
+    assert.equal((await fetch(`${base}/api/whoami?t=${srv.token}`)).status, 200);
   });
 });
 
@@ -277,4 +278,115 @@ test('addMirrorToObs speaks obs-websocket v5 (mock server)', async () => {
   } finally {
     wss.close();
   }
+});
+
+// ---- remembered phones, HTTPS, recording ----
+const { DeviceStore } = require('../src/devices');
+const tlsCa = require('../src/tls');
+
+function memSettings(init = {}) {
+  const data = { devices: [], ...init };
+  return { get: (k) => data[k], update: (p) => Object.assign(data, p), data };
+}
+
+test('DeviceStore pairs, verifies, renames duplicates, forgets', () => {
+  const s = memSettings();
+  const store = new DeviceStore(s);
+  const a = store.pair('iPhone');
+  const b = store.pair('iPhone');
+  assert.equal(b.name, 'iPhone 2');
+  assert.match(a.token, /^[a-f0-9]{64}$/);
+  assert.deepEqual(store.verify(a.token), { id: a.id, name: 'iPhone' });
+  assert.equal(store.verify('f'.repeat(64)), null);
+  assert.equal(store.verify('short'), null);
+  assert.ok(!JSON.stringify(s.data).includes(a.token)); // only hashes are stored
+  store.forget(a.id);
+  assert.equal(store.verify(a.token), null);
+  assert.ok(store.verify(b.token));
+});
+
+test('pairing: QR session -> device token that survives New link; forgetting disconnects', async () => {
+  const devices = new DeviceStore(memSettings());
+  await withServer(
+    async ({ srv, base }) => {
+      const paired = [];
+      srv.on('paired', (d) => paired.push(d.name));
+      const who = await (await fetch(`${base}/api/whoami?t=${srv.token}`)).json();
+      assert.equal(who.kind, 'session');
+      const r = await fetch(`${base}/api/pair?t=${srv.token}`, { method: 'POST', body: JSON.stringify({ name: 'iPhone' }) });
+      const d = await r.json();
+      assert.equal(d.name, 'iPhone');
+      assert.deepEqual(paired, ['iPhone']);
+      // Device tokens can't pair again.
+      assert.equal((await fetch(`${base}/api/pair?t=${d.token}`, { method: 'POST', body: '{}' })).status, 400);
+      const me = await (await fetch(`${base}/api/whoami?t=${d.token}`)).json();
+      assert.equal(me.kind, 'device');
+
+      const wsBase = base.replace('http', 'ws');
+      const sess = await wsOpen(`${wsBase}/ws?t=${srv.token}`);
+      const dev = await wsOpen(`${wsBase}/ws?t=${d.token}`);
+      const sessClosed = new Promise((r) => sess.ws.once('close', (c) => r(c)));
+      srv.rotateToken(); // New link: QR pages drop, the remembered phone stays
+      assert.equal(await sessClosed, 4001);
+      await new Promise((r) => setTimeout(r, 50));
+      assert.equal(dev.ws.readyState, WebSocket.OPEN);
+      assert.equal((await fetch(`${base}/api/state?t=${d.token}`)).status, 200);
+
+      const devClosed = new Promise((r) => dev.ws.once('close', (c) => r(c)));
+      devices.forget(d.id);
+      srv.closeDevice(d.id);
+      assert.equal(await devClosed, 4001);
+      assert.equal((await fetch(`${base}/api/state?t=${d.token}`)).status, 403);
+    },
+    { devices },
+  );
+});
+
+test('local CA: name-constrained, issues a cert that works over HTTPS for LAN IPs only', async () => {
+  const ca = tlsCa.createCa('test');
+  const caX = new (require('crypto').X509Certificate)(ca.certPem);
+  assert.ok(caX.ca);
+  const leaf = tlsCa.issueServerCert({ caKeyPem: ca.keyPem, caCertPem: ca.certPem, ips: ['192.168.50.7'], host: 'MY-PC' });
+  const leafX = new (require('crypto').X509Certificate)(leaf.certPem);
+  assert.ok(leafX.checkIssued(caX) && leafX.verify(caX.publicKey));
+  assert.match(leafX.subjectAltName, /IP Address:192\.168\.50\.7/);
+  assert.match(leafX.subjectAltName, /DNS:my-pc\.local/);
+  assert.ok(!/CN=/.test(leafX.subject));
+
+  // Serve the phone page over https and fetch it trusting only our CA.
+  // (Connect to 127.0.0.1 but verify as the LAN IP, since this test can't bind it.)
+  await withServer(
+    async ({ srv }) => {
+      const port = await srv.startTls(0, { key: leaf.keyPem, cert: leaf.certPem }, '127.0.0.1');
+      const https = require('https');
+      const get = (servername) =>
+        new Promise((resolve) => {
+          const req = https.get(
+            { host: '127.0.0.1', port, agent: false, path: `/api/whoami?t=${srv.token}`, ca: ca.certPem, checkServerIdentity: (h, cert) => require('tls').checkServerIdentity(servername, cert) },
+            (r) => {
+              let b = '';
+              r.on('data', (c) => (b += c));
+              r.on('end', () => resolve({ ok: true, body: JSON.parse(b) }));
+            },
+          );
+          req.on('error', (e) => resolve({ ok: false, err: e.code || e.message }));
+        });
+      const good = await get('192.168.50.7');
+      assert.ok(good.ok, good.err);
+      assert.equal(good.body.tlsPort, port);
+      const bad = await get('10.9.9.9'); // not in the certificate
+      assert.equal(bad.ok, false);
+      const der = await fetch(`http://127.0.0.1:${srv.port}/airbridge-ca.crt?t=${srv.token}`);
+      assert.equal(der.status, 200);
+      assert.equal(der.headers.get('content-type'), 'application/x-x509-ca-cert');
+      assert.ok(new (require('crypto').X509Certificate)(Buffer.from(await der.arrayBuffer())).ca);
+    },
+    { getCaCert: () => ca.certPem },
+  );
+});
+
+test('buildArgs: recording prefix uses forward slashes', () => {
+  const a = buildArgs({ deviceName: 'PC', recordSessions: true, recordPrefix: 'C:\\Users\\A B\\Videos\\AirBridge 2026-11-07' });
+  assert.deepEqual(a.slice(a.indexOf('-mp4'), a.indexOf('-mp4') + 2), ['-mp4', 'C:/Users/A B/Videos/AirBridge 2026-11-07']);
+  assert.ok(!buildArgs({ deviceName: 'PC', recordSessions: false, recordPrefix: 'x' }).includes('-mp4'));
 });

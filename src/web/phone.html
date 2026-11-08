@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AirBridge">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/icon.png">
 <title>__DEVICE__ · AirBridge</title>
 <style>
   :root { --bg:#f5f6f8; --card:#fff; --fg:#14161a; --muted:#5d6470; --accent:#2f6fec; --ok:#1f8a4c; --err:#c23a3a; --line:#e3e6eb; --pad:#e9ecf1; }
@@ -53,6 +58,15 @@
   .btns button.held { background:var(--accent); color:#fff; border-color:var(--accent); }
   .keys { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
   #kb { margin-top:10px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin:8px 0 4px; font-size:14px; }
+  .card h3 { margin:0 0 6px; font-size:15px; }
+  .card ol { margin:6px 0 8px; padding-left:20px; }
+  .card li { background:none; border:0; padding:2px 0; }
+  .card .actions { flex-wrap:wrap; }
+  a.button { display:inline-block; padding:8px 14px; border-radius:10px; background:var(--accent); color:#fff; text-decoration:none; font-weight:600; }
+  .small { font-size:12px; }
+  #expired { text-align:center; padding:40px 8px; }
+  #expired h2 { font-size:18px; }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -63,6 +77,35 @@
 </header>
 
 <main>
+  <div id="expired" class="hidden">
+    <h2>This phone isn't connected to AirBridge</h2>
+    <p class="muted">The link has expired, or this phone was removed on the computer. Open AirBridge on the computer and scan its QR code again.</p>
+  </div>
+
+  <div class="card hidden" id="homeTip">
+    <h3>Add AirBridge to your Home Screen</h3>
+    <span class="muted">This phone is now remembered, so you won't need the QR code again. In Safari, tap Share → <b>Add to Home Screen</b>. On Android, use the ⋮ menu → <b>Add to Home screen</b>.</span>
+    <div class="actions"><button class="ghost" data-dismiss="homeTip">Got it</button></div>
+  </div>
+
+  <div class="card hidden" id="secureTip">
+    <h3>Optional: secure connection (HTTPS)</h3>
+    <span class="muted">Encrypts everything between the phone and PC, and lets this page read the phone's clipboard. Do it once:</span>
+    <ol id="secureStepsIos">
+      <li><a href="#" class="caLink">Download the AirBridge certificate</a> → <b>Allow</b>.</li>
+      <li>Settings → <b>Profile Downloaded</b> → <b>Install</b>.</li>
+      <li>Settings → General → About → <b>Certificate Trust Settings</b> → turn on <b>AirBridge local CA</b>.</li>
+      <li>Come back here and tap <b>Check again</b>.</li>
+    </ol>
+    <ol id="secureStepsAndroid" class="hidden">
+      <li><a href="#" class="caLink">Download the AirBridge certificate</a>.</li>
+      <li>Settings → Security → Encryption &amp; credentials → <b>Install a certificate</b> → <b>CA certificate</b>, and pick the downloaded file.</li>
+      <li>Come back here and tap <b>Check again</b>.</li>
+    </ol>
+    <span class="muted small">The certificate only works for addresses on your home network, not for real websites. Set this up before adding AirBridge to your Home Screen.</span>
+    <div class="actions"><button class="ghost" id="secureCheck">Check again</button><button class="ghost" data-dismiss="secureTip">Not now</button></div>
+  </div>
+
   <section id="tab-send" class="on">
     <label class="pick" for="files">
       <strong>Choose photos or files</strong>
@@ -83,6 +126,7 @@
   <section id="tab-clip">
     <h2>Send text to the computer</h2>
     <textarea id="clipOut" placeholder="Paste or type here. It's copied to the computer's clipboard."></textarea>
+    <button class="primary hidden" id="clipPasteSend">Send my phone's clipboard</button>
     <button class="primary" id="clipSend">Copy to computer</button>
     <p class="msg" id="clipMsg"></p>
     <h2>From the computer</h2>
@@ -131,8 +175,15 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
-  const token = new URLSearchParams(location.search).get('t') || '';
-  const q = '?t=' + encodeURIComponent(token);
+  // Token: from the URL (QR link, or the saved home-screen URL), else from storage.
+  let token = new URLSearchParams(location.search).get('t') || '';
+  let q = '';
+  const setToken = (t) => { token = t; q = '?t=' + encodeURIComponent(t); };
+  setToken(token);
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+  };
   const fmt = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
   let state = { shared: [], clip: null, remote: false, uploads: true };
 
@@ -152,7 +203,7 @@
     ws.onopen = () => { retry = 0; setConn(true); clearInterval(pollTimer); pollTimer = null; };
     ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === 'state') render(m); };
     ws.onclose = (e) => {
-      if (e.code === 4001) { expired = true; clearInterval(pollTimer); $('conn').textContent = 'This link has expired. Scan the QR code again.'; $('conn').className = 'off'; return; }
+      if (e.code === 4001) { clearInterval(pollTimer); showExpired(); return; }
       setConn(false);
       if (!pollTimer) pollTimer = setInterval(poll, 4000);
       setTimeout(connect, Math.min(10000, 1000 * 2 ** retry++));
@@ -326,8 +377,120 @@
   });
   kb.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send({ type: 'k', k: 'enter' }); } });
 
-  connect();
-  poll();
+  // ---- sign in, remember this phone, and move to https when trusted ----
+  function showExpired() {
+    expired = true;
+    if (store.get('airbridge-token') === token) store.set('airbridge-token', null);
+    $('conn').textContent = 'Not connected';
+    $('conn').className = 'off';
+    $('expired').classList.remove('hidden');
+    document.querySelectorAll('section, nav, .card').forEach((el) => el.classList.add('hidden'));
+  }
+
+  const whoami = () => fetch('/api/whoami' + q, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+  function phoneName() {
+    const ua = navigator.userAgent;
+    if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'Android phone' : 'Android tablet';
+    return 'Browser';
+  }
+
+  const isStandalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const dismissed = (id) => store.get('airbridge-dismiss-' + id) === '1';
+  document.querySelectorAll('[data-dismiss]').forEach((b) => (b.onclick = () => {
+    store.set('airbridge-dismiss-' + b.dataset.dismiss, '1');
+    $(b.dataset.dismiss).classList.add('hidden');
+  }));
+
+  async function signIn() {
+    let who = token ? await whoami() : null;
+    const saved = store.get('airbridge-token');
+    if (!who && saved && saved !== token) {
+      setToken(saved);
+      who = await whoami();
+    }
+    if (!who) { showExpired(); return null; }
+    let justPaired = false;
+    if (who.kind === 'session') {
+      // First visit from the QR code: get this phone's own long-lived token.
+      const r = await fetch('/api/pair' + q, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: phoneName() }) }).catch(() => null);
+      if (r && r.ok) {
+        const d = await r.json();
+        setToken(d.token);
+        justPaired = true;
+      }
+    }
+    store.set('airbridge-token', token);
+    // Keep the token in the address, so "Add to Home Screen" saves a working link.
+    history.replaceState(null, '', '/' + q);
+    if (justPaired && !isStandalone()) store.set('airbridge-dismiss-homeTip', null);
+    if (!isStandalone() && !dismissed('homeTip')) $('homeTip').classList.remove('hidden');
+    return who;
+  }
+
+  // https is only used once the phone trusts AirBridge's local certificate.
+  async function trySecure(who) {
+    if (location.protocol === 'https:') {
+      if (navigator.clipboard && navigator.clipboard.readText) $('clipPasteSend').classList.remove('hidden');
+      return;
+    }
+    if (!who.tlsPort) return;
+    const httpsBase = `https://${location.hostname}:${who.tlsPort}`;
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), 3000);
+    const ok = await fetch(httpsBase + '/api/ping', { cache: 'no-store', signal: ctl.signal }).then((r) => r.ok).catch(() => false);
+    if (ok && !isStandalone()) { location.replace(httpsBase + '/' + q); return true; }
+    if (ok) {
+      // A Home Screen app can't move to another origin; it would open Safari instead.
+      $('secureTip').querySelector('h3').textContent = 'HTTPS is ready';
+      $('secureTip').querySelector('.muted').textContent = 'To use it here, delete this Home Screen icon, open the QR link in Safari, and add it to the Home Screen again.';
+      $('secureStepsIos').classList.add('hidden');
+      $('secureStepsAndroid').classList.add('hidden');
+      $('secureCheck').classList.add('hidden');
+      if (!dismissed('secureTip')) $('secureTip').classList.remove('hidden');
+      return false;
+    }
+    if (who.hasCa && !dismissed('secureTip')) {
+      // Set up https first: a Home Screen icon saved now would keep the http address.
+      $('homeTip').classList.add('hidden');
+      const android = /Android/.test(navigator.userAgent);
+      $('secureStepsIos').classList.toggle('hidden', android);
+      $('secureStepsAndroid').classList.toggle('hidden', !android);
+      document.querySelectorAll('.caLink').forEach((a) => (a.href = '/airbridge-ca.crt' + q));
+      $('secureTip').classList.remove('hidden');
+    }
+    return false;
+  }
+  // "Not now" on the https card: show the Home Screen tip instead.
+  document.querySelector('[data-dismiss="secureTip"]').addEventListener('click', () => {
+    if (!isStandalone() && !dismissed('homeTip')) $('homeTip').classList.remove('hidden');
+  });
+  $('secureCheck').onclick = async () => {
+    $('secureCheck').textContent = 'Checking…';
+    const who = await whoami();
+    if (!(who && (await trySecure(who)))) $('secureCheck').textContent = 'Not trusted yet. Check again';
+  };
+
+  $('clipPasteSend').onclick = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) throw new Error('Your clipboard is empty.');
+      $('clipOut').value = text;
+      postJson('/api/clipboard', { text }, $('clipMsg'), 'Copied on the computer ✓');
+    } catch (e) {
+      $('clipMsg').textContent = e.message || 'Clipboard access was blocked.';
+      $('clipMsg').className = 'msg err';
+    }
+  };
+
+  signIn().then(async (who) => {
+    if (!who) return;
+    if (await trySecure(who)) return; // navigating to https
+    connect();
+    poll();
+  });
 </script>
 </body>
 </html>
