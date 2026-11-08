@@ -32,6 +32,10 @@ function render(s) {
   if (document.activeElement !== $('deviceName')) $('deviceName').value = st.deviceName;
   $('audioMode').value = st.audioMode;
   $('audioHint').classList.toggle('hidden', st.audioMode !== 'phone');
+  renderAudioDevices(s);
+  $('keepWindowOpen').checked = st.keepWindowOpen;
+  $('obsPassword').placeholder = st.hasObsPassword ? 'Saved password (leave empty to reuse)' : 'OBS WebSocket password (if set)';
+  renderBridge(s);
   $('requirePin').checked = st.requirePin;
   $('fullscreen').checked = st.fullscreen;
   $('h265').checked = st.h265;
@@ -75,6 +79,69 @@ function render(s) {
   }
 }
 
+function renderAudioDevices(s) {
+  const sel = $('audioDevice');
+  $('audioDeviceRow').classList.toggle('hidden', s.settings.audioMode !== 'pc' || !s.audioOutputs.length);
+  if (document.activeElement === sel) return;
+  sel.innerHTML = '';
+  const def = s.audioOutputs.find((d) => d.isDefault);
+  const opts = [{ id: '', name: `Windows default${def ? ` (${def.name})` : ''}` }, ...s.audioOutputs];
+  // Keep a saved device visible even while it's unplugged.
+  if (s.settings.audioDevice && !s.audioOutputs.some((d) => d.id === s.settings.audioDevice)) {
+    opts.push({ id: s.settings.audioDevice, name: 'Saved device (not connected)' });
+  }
+  for (const d of opts) {
+    const o = document.createElement('option');
+    o.value = d.id;
+    o.textContent = d.name;
+    o.selected = d.id === s.settings.audioDevice;
+    sel.append(o);
+  }
+}
+
+function li(text, actions = [], title = '') {
+  const el = document.createElement('li');
+  const span = document.createElement('span');
+  span.className = 'text';
+  span.textContent = text;
+  span.title = title || text;
+  const box = document.createElement('span');
+  box.className = 'row-actions';
+  for (const [label, fn] of actions) {
+    const b = document.createElement('button');
+    b.className = 'link';
+    b.textContent = label;
+    b.onclick = fn;
+    box.append(b);
+  }
+  el.append(span, box);
+  return el;
+}
+
+function fill(ul, items, empty) {
+  ul.innerHTML = '';
+  if (!items.length && empty) {
+    const e = document.createElement('li');
+    e.className = 'empty';
+    e.textContent = empty;
+    ul.append(e);
+  }
+  for (const i of items) ul.append(i);
+}
+
+function renderBridge(s) {
+  const st = s.settings;
+  $('phoneClients').textContent = s.phoneClients ? `${s.phoneClients} phone page${s.phoneClients > 1 ? 's' : ''} open` : 'No phone connected';
+  fill($('sharedList'), s.shared.map((f) => li(`${f.name} · ${fmtBytes(f.size)}`, [['Remove', () => api.unshare(f.id).then(render)]])));
+  $('autoCopyClipboard').checked = st.autoCopyClipboard;
+  fill($('phoneTexts'), s.phoneTexts.slice(0, 5).map((t) => li(t.text, [['Copy', () => api.copyText(t.text)]])));
+  $('autoOpenLinks').checked = st.autoOpenLinks;
+  fill($('linkList'), s.links.slice(0, 8).map((l) => li(l.url, [['Open', () => api.openLink(l.url)]])), "Use the phone's Link tab.");
+  $('remoteEnabled').checked = st.remoteEnabled;
+  $('remoteEnabled').disabled = !s.remoteAvailable;
+  if (!s.remoteAvailable) $('remoteHint').textContent = 'Remote control needs the AirBridge helper (Windows build).';
+}
+
 const set = (patch) => api.updateSettings(patch).then(render);
 
 $('receiverEnabled').onchange = (e) => set({ receiverEnabled: e.target.checked });
@@ -89,6 +156,46 @@ $('uploadsEnabled').onchange = (e) => set({ uploadsEnabled: e.target.checked });
 $('chooseFolder').onclick = () => api.chooseFolder().then(render);
 $('openFolder').onclick = () => api.openFolder();
 $('fixNetwork').onclick = () => api.openNetworkSettings();
+$('audioDevice').onchange = (e) => set({ audioDevice: e.target.value });
+$('keepWindowOpen').onchange = (e) => set({ keepWindowOpen: e.target.checked });
+$('addToObs').onclick = async () => {
+  const msg = $('obsMsg');
+  msg.className = 'small';
+  msg.textContent = 'Connecting to OBS…';
+  const res = await api.addToObs($('obsPassword').value);
+  $('obsPassword').value = '';
+  if (res.ok) {
+    msg.className = 'small ok';
+    msg.textContent = res.existed
+      ? `Already in scene “${res.scene}”.`
+      : `Added to scene “${res.scene}”. Start mirroring and it shows up in OBS.`;
+  } else {
+    msg.className = 'small err';
+    msg.textContent = res.error;
+  }
+  api.getState().then(render);
+};
+$('autoCopyClipboard').onchange = (e) => set({ autoCopyClipboard: e.target.checked });
+$('autoOpenLinks').onchange = (e) => set({ autoOpenLinks: e.target.checked });
+$('remoteEnabled').onchange = (e) => set({ remoteEnabled: e.target.checked });
+$('chooseShare').onclick = () => api.chooseShareFiles().then(render);
+$('sendClip').onclick = async () => {
+  const res = await api.sendClipboard();
+  $('clipMsg').className = res.ok ? 'small ok' : 'small err';
+  $('clipMsg').textContent = res.ok ? "Sent. It's in the phone's Clipboard tab." : 'Your clipboard has no text.';
+};
+
+// Drag files from Explorer onto the drop zone (and ignore drops elsewhere).
+const drop = $('drop');
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  if (e.dataTransfer.files.length) api.shareFiles(Array.from(e.dataTransfer.files)).then(render);
+});
 $('newLink').onclick = () => api.newLink().then(render);
 $('address').onchange = (e) => api.chooseAddress(e.target.value).then(render);
 

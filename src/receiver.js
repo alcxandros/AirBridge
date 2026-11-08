@@ -35,8 +35,11 @@ function buildArgs(settings, keyFile) {
   } else if (settings.audioMode === 'off') {
     args.push('-as', '0'); // accept the audio stream but don't play it
   } else if (IS_WIN) {
-    args.push('-as', 'wasapisink');
+    // Only well-formed endpoint ids reach the GStreamer pipeline string.
+    const dev = settings.audioDevice || '';
+    args.push('-as', /^\{[\w.]+\}\.\{[0-9a-f-]+\}$/i.test(dev) ? `wasapisink device="${dev}"` : 'wasapisink');
   }
+  if (settings.keepWindowOpen) args.push('-nc');
   if (settings.fullscreen) args.push('-fs');
   if (settings.h265) args.push('-h265');
   if (settings.requirePin && /^\d{4}$/.test(settings.pin || '')) args.push('-pin', settings.pin);

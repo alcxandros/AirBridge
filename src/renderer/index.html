@@ -38,10 +38,24 @@
         </select>
       </label>
       <p class="hint small hidden" id="audioHint">Takes effect the next time the phone starts mirroring.</p>
+      <label id="audioDeviceRow">Play through
+        <select id="audioDevice"></select>
+      </label>
       <label class="check"><input type="checkbox" id="requirePin"> Ask for a PIN before mirroring</label>
       <label class="check"><input type="checkbox" id="fullscreen"> Open mirrored screen full-screen</label>
       <label class="check"><input type="checkbox" id="h265"> Allow 4K / HEVC (needs a recent GPU)</label>
     </div>
+
+    <details id="obs">
+      <summary>Stream it in OBS</summary>
+      <label class="check"><input type="checkbox" id="keepWindowOpen"> Keep the mirror window open between sessions</label>
+      <p class="hint small">AirBridge adds a Window Capture source for the mirror to your current OBS scene. In OBS, first turn on Tools → WebSocket Server Settings → Enable WebSocket server.</p>
+      <div class="inline">
+        <input type="password" id="obsPassword" placeholder="OBS WebSocket password" autocomplete="off">
+        <button class="ghost" id="addToObs">Add to OBS</button>
+      </div>
+      <p class="small" id="obsMsg"></p>
+    </details>
 
     <details>
       <summary>Log</summary>
@@ -73,6 +87,38 @@
     </div>
     <h3>Received</h3>
     <ul id="received"><li class="empty">Nothing yet.</li></ul>
+  </section>
+
+  <section class="card wide" id="bridge">
+    <div class="card-head">
+      <h2>Phone ↔ PC</h2>
+      <span class="small muted" id="phoneClients"></span>
+    </div>
+    <p class="hint">Everything here appears on the phone page from the QR code above.</p>
+    <div class="cols">
+      <div class="col">
+        <h3>Send files to phone</h3>
+        <div class="drop" id="drop">Drop files here or <button class="link" id="chooseShare">choose…</button><br><span class="small muted">They appear in the phone's Get tab</span></div>
+        <ul id="sharedList"></ul>
+      </div>
+      <div class="col">
+        <h3>Clipboard</h3>
+        <button class="ghost" id="sendClip">Send clipboard to phone</button>
+        <p class="small" id="clipMsg"></p>
+        <label class="check small"><input type="checkbox" id="autoCopyClipboard"> Copy text from the phone automatically</label>
+        <ul id="phoneTexts"></ul>
+      </div>
+      <div class="col">
+        <h3>Links from phone</h3>
+        <label class="check small"><input type="checkbox" id="autoOpenLinks"> Open links straight away</label>
+        <ul id="linkList"><li class="empty">Use the phone's Link tab.</li></ul>
+      </div>
+      <div class="col">
+        <h3>Remote control</h3>
+        <label class="check"><input type="checkbox" id="remoteEnabled"> Allow phone to control mouse &amp; keyboard</label>
+        <p class="hint small" id="remoteHint">Use the phone's Remote tab as a trackpad, keyboard and media remote. Only phones with the current QR link can connect. Use “New link” to cut them off.</p>
+      </div>
+    </div>
   </section>
 </main>
 <script src="app.js"></script>

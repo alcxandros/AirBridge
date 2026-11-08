@@ -12,6 +12,12 @@ const DEFAULTS = {
   // 'pc': play on this PC; 'off': PC accepts but discards audio (phone is
   // silent too); 'phone': advertise no audio so iOS may keep it (experimental).
   audioMode: 'pc',
+  audioDevice: '', // WASAPI endpoint id; '' = Windows default output
+  keepWindowOpen: false, // keep the mirror window between sessions (for OBS)
+  obsPasswordEnc: '', // OBS WebSocket password, encrypted with Electron safeStorage
+  remoteEnabled: false,
+  autoOpenLinks: true,
+  autoCopyClipboard: true,
   h265: false,
   uploadsEnabled: true,
   uploadDir: path.join(os.homedir(), 'Downloads', 'AirBridge'),

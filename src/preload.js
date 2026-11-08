@@ -1,5 +1,5 @@
 'use strict';
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('airbridge', {
   getState: () => ipcRenderer.invoke('get-state'),
@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld('airbridge', {
   newLink: () => ipcRenderer.invoke('new-link'),
   chooseAddress: (a) => ipcRenderer.invoke('choose-address', a),
   restartReceiver: () => ipcRenderer.invoke('restart-receiver'),
+  // Dropped files: the sandboxed page can't see paths, so resolve them here.
+  shareFiles: (files) => ipcRenderer.invoke('share-paths', files.map((f) => webUtils.getPathForFile(f)).filter(Boolean)),
+  chooseShareFiles: () => ipcRenderer.invoke('choose-share-files'),
+  unshare: (id) => ipcRenderer.invoke('unshare', id),
+  sendClipboard: () => ipcRenderer.invoke('send-clipboard'),
+  copyText: (t) => ipcRenderer.invoke('copy-text', t),
+  openLink: (u) => ipcRenderer.invoke('open-link', u),
+  addToObs: (pw) => ipcRenderer.invoke('add-to-obs', pw),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
   onLog: (cb) => ipcRenderer.on('log', (_e, l) => cb(l)),
 });

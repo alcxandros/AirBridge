@@ -1,41 +1,63 @@
 # AirBridge
 
-Free, open-source alternative to paid "AirPlay to PC" apps. Two features:
+Free, open-source alternative to paid "AirPlay to PC" apps, plus a phone ↔ PC bridge
+that needs nothing installed on the phone.
 
 1. **Screen mirroring and audio from iPhone, iPad and Mac.** Your PC shows up in
-   Control Centre → *Screen Mirroring*, just like an Apple TV.
-2. **Send files from any phone.** Scan a QR code and pick photos or files. They land
-   in a folder on your PC. Nothing to install on the phone, and it works on iOS and Android.
+   Control Centre → *Screen Mirroring*, just like an Apple TV. You can choose where the
+   sound goes (see below), and add the mirror to OBS in one click.
+2. **Phone page from a QR code** (iPhone and Android, in the browser):
+   - **Send:** photos and files from the phone land in a folder on the PC.
+   - **Get:** files you drop into AirBridge on the PC can be downloaded on the phone.
+   - **Clipboard:** text from the phone is copied on the PC, and you can push the PC's
+     clipboard to the phone.
+   - **Link:** a link from the phone opens in the PC's browser.
+   - **Remote:** the phone becomes a trackpad, keyboard and media remote. This is off
+     by default.
 
 Windows 10/11 (x64) is the main target. The app shell also runs on macOS and Linux
 if `uxplay` is installed there (for example `brew install uxplay` or `apt install uxplay`).
+On those systems the remote control and output picker aren't available.
 
 ## How it works
 
 ```
  iPhone ──AirPlay (mDNS + RAOP/mirroring)──▶ uxplay.exe ──GStreamer──▶ D3D12 window + WASAPI audio
-   │                                            ▲  supervised by
-   │                                            │
-   └──HTTP upload (page from QR code)──▶ AirBridge (Electron) ──▶ chosen folder
+   │                                            ▲  supervised by              │
+   │                                            │                             └─▶ OBS (Window Capture)
+   └──HTTP + WebSocket (page from QR code)──▶ AirBridge (Electron)
+                                                ├─▶ upload folder / shared files / clipboard / browser
+                                                └─▶ airbridge-helper.exe (SendInput: mouse, keys)
 ```
 
 - **Receiver engine: [UxPlay](https://github.com/FDH2/UxPlay)** (GPL-3.0), built from
   source and bundled with a trimmed GStreamer runtime. UxPlay 1.74 has its own
   mDNS responder, so **Apple Bonjour isn't needed**. AirBridge starts and stops it,
   restarts it after a crash, and passes the settings through (`-n <name> -nh -p 7100
-  -vs d3d12videosink -as wasapisink`, plus `-pin`, `-fs`, `-h265` when enabled). A
-  persistent key (`-key`) lets iOS remember the receiver.
-- **File drop:** a small HTTP server in the Electron main process (`src/uploadServer.js`).
-  The QR code holds the PC's LAN address and a random token. Uploads stream to disk.
-  Names are sanitised, are never overwritten (`photo (1).jpg`), and are capped in
-  size (8 GB by default). **New link** in the app invalidates the old QR code.
+  -vs d3d12videosink -as wasapisink`, plus `-pin`, `-fs`, `-h265`, `-nc` when enabled).
+  A persistent key (`-key`) lets iOS remember the receiver.
+- **Phone server** (`src/phoneServer.js`): HTTP and a WebSocket in the Electron main
+  process. The QR code holds the PC's LAN address and a random token, and every request
+  and WebSocket needs that token. **New link** in the app invalidates the old QR code
+  and disconnects any open phone pages. Uploads stream to disk. Names are sanitised,
+  are never overwritten (`photo (1).jpg`), and are capped in size (8 GB by default). The
+  phone can download only files you explicitly shared, and it never sees their PC paths.
+  Only `http(s)` links are opened.
+- **Native helper** (`native/helper.cpp` → `airbridge-helper.exe`): lists audio outputs
+  and injects mouse and keyboard input with `SendInput`. The phone page sends simple
+  messages, and the server checks and converts them into a small fixed set of commands
+  (moves, clicks, scroll, text, and a list of allowed keys). Remote input is only
+  accepted while **Allow phone to control mouse & keyboard** is on. If the phone
+  disconnects, any button it was holding is released. Windows itself blocks injected
+  input into elevated windows and UAC prompts.
 - **Firewall:** the installer adds inbound *Private*-profile rules for `uxplay.exe`
   and `AirBridge.exe` and removes them on uninstall. If your network is set to
   *Public*, the app shows a banner, because Windows blocks discovery there.
 
 ### Sound options
 
-- **Play on this PC** (default): audio goes through the PC's default output.
+- **Play on this PC** (default): audio goes to the output picked in **Play through**
+  (Windows default, or a specific device such as speakers instead of your headset).
 - **Mute:** the PC accepts the audio but doesn't play it. iOS still sends it, so the
   phone is silent too.
 - **Keep on the phone:** AirBridge advertises no audio support (`-noaudiofeat`, from
@@ -44,13 +66,30 @@ if `uxplay` is installed there (for example `brew install uxplay` or `apt instal
   on an iPhone (November 2026). This relies on undocumented iOS behaviour, so a future
   iOS update could change it. Start mirroring again after switching modes.
 
+### Streaming in OBS
+
+Open **Stream it in OBS** in the Screen mirroring card and click **Add to OBS**. AirBridge
+connects to OBS's built-in WebSocket server and adds a *Window Capture* source called
+"iPhone mirror (AirBridge)" to the current scene. The source matches `uxplay.exe` and
+captures only the window's client area. AirBridge also turns on **Keep the mirror
+window open between sessions** (`-nc`), so the source doesn't disappear when the phone
+disconnects. You must first turn on OBS's WebSocket server under Tools → WebSocket
+Server Settings. If it has a password, enter it once. AirBridge stores it encrypted
+with Windows DPAPI through Electron `safeStorage`.
+
+To set it up by hand instead: add a Window Capture source, pick `[uxplay.exe]: Direct3D12
+Renderer`, set the capture method to *Windows 10 (1903 and up)*, and tick *Client area*.
+
 ### Not included
 
 - **AirDrop** is out of scope. It's a closed protocol that runs over Apple's AWDL
-  Wi-Fi mode, which PC Wi-Fi adapters can't speak. The QR page is the cross-platform
+  Wi-Fi mode, which PC Wi-Fi adapters can't speak. The phone page is the cross-platform
   substitute.
 - YouTube-style "AirPlay video" (HLS URL casting) isn't bundled yet. That needs
   GStreamer's HTTP/TLS plugins. Mirroring and audio streaming work.
+- The phone page runs over plain HTTP on your LAN, so the phone's browser blocks some
+  features. For example, the page can't read the phone's clipboard by itself, so you
+  paste into the Clipboard tab.
 
 ## Use it
 
@@ -60,7 +99,8 @@ if `uxplay` is installed there (for example `brew install uxplay` or `apt instal
 2. Keep the PC and phone on the same Wi-Fi, and set that network to **Private** in Windows.
 3. iPhone: Control Centre → Screen Mirroring → pick your PC. Close the app window to
    keep it running in the tray.
-4. Files: scan the QR code in the app with the phone camera, choose files, tap **Send**.
+4. Phone ↔ PC: scan the QR code in the app with the phone camera. Tip: in Safari, use
+   Share → *Add to Home Screen* so it opens like an app. Re-scan if you press **New link**.
 
 ## Build from source (Windows)
 
@@ -68,15 +108,23 @@ Prerequisites: Node.js 20+, Git, and [MSYS2](https://www.msys2.org) (`winget ins
 
 ```powershell
 npm install
-npm run build:uxplay   # builds UxPlay in MSYS2 UCRT64 → vendor/uxplay (~10 min first time)
+npm run build:native   # UxPlay → vendor/uxplay (~10 min first time) and helper → vendor/helper
 npm start              # run the app in development
-npm test               # upload server + argument tests
+npm test               # phone server, settings, arguments, OBS protocol (mock server)
 npm run dist           # NSIS installer → dist/
 ```
 
-`scripts/build-uxplay.sh` pins the UxPlay commit (`UXPLAY_REF`), installs the MSYS2
-packages, builds with CMake/Ninja, copies only the GStreamer plugins UxPlay uses,
-collects their DLL dependencies with `ntldd`, and copies the licence files.
+`scripts/build-uxplay.sh` pins the UxPlay commit (`UXPLAY_REF`), applies `patches/`,
+installs the MSYS2 packages, builds with CMake/Ninja, copies only the GStreamer plugins
+UxPlay uses, collects their DLL dependencies with `ntldd`, and copies the licence files.
+`scripts/build-helper.sh` builds the helper as a static exe.
+
+Development helpers:
+
+- `node scripts/dev-upload.js` serves just the phone page at `http://localhost:8799/?t=dev`
+  and logs every event, including remote input, without moving your mouse.
+- `AIRBRIDGE_PROFILE=<folder>` runs a separate dev copy next to an installed AirBridge.
+- `AIRBRIDGE_INPUT_LOG=<file>` logs remote input commands.
 
 ### Troubleshooting
 
@@ -86,6 +134,8 @@ collects their DLL dependencies with `ntldd`, and copies the licence files.
 - **Black or stuttering video on old GPUs:** turn off 4K/HEVC.
 - **Phone can't open the QR link:** pick the right adapter in the **Network** list
   (virtual adapters from Hyper-V or WSL are listed last).
+- **Remote doesn't move the mouse over one app:** that app is running as administrator,
+  and Windows blocks input into it from normal programs.
 
 ## Licence
 

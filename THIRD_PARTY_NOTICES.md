@@ -15,6 +15,11 @@ Full licence texts ship in `resources/uxplay/licenses/`.
 | Electron | desktop shell | MIT | https://www.electronjs.org |
 | busboy | multipart upload parsing | MIT | https://github.com/mscdex/busboy |
 | qrcode | QR code generation | MIT | https://github.com/soldair/node-qrcode |
+| ws | WebSocket server and client (phone page, OBS) | MIT | https://github.com/websockets/ws |
+| MinGW-w64 runtime (statically linked into `airbridge-helper.exe`) | C/C++ runtime | ZPL-2.1 / MIT-style, GCC Runtime Library Exception | https://www.mingw-w64.org |
+
+OBS Studio is not bundled. AirBridge only talks to an OBS you've installed, through
+its WebSocket API.
 
 **Source code offer.** Source for AirBridge is at https://github.com/alcxandros/airbridge.
 UxPlay is modified by the patches in `patches/` (GPL-3.0), and

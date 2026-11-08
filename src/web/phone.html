@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>__DEVICE__ · AirBridge</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --fg:#14161a; --muted:#5d6470; --accent:#2f6fec; --ok:#1f8a4c; --err:#c23a3a; --line:#e3e6eb; --pad:#e9ecf1; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --card:#191c22; --fg:#eef0f3; --muted:#9aa2ae; --accent:#5b8ff5; --ok:#4cc483; --err:#f07070; --line:#2a2f37; --pad:#22262e; } }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { margin:0; font:16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--fg); display:flex; flex-direction:column; }
+  header { padding: calc(14px + env(safe-area-inset-top)) 16px 8px; }
+  header h1 { font-size:18px; margin:0; }
+  header p { margin:2px 0 0; color:var(--muted); font-size:13px; }
+  header p.off { color:var(--err); }
+  main { flex:1; overflow:auto; padding: 8px 16px 16px; max-width:560px; width:100%; margin:0 auto; }
+  nav { display:flex; border-top:1px solid var(--line); background:var(--card); padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex:1; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; padding:8px 0 10px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  nav button svg { width:22px; height:22px; }
+  nav button.on { color:var(--accent); }
+  section { display:none; }
+  section.on { display:block; }
+  h2 { font-size:15px; margin:14px 0 8px; }
+  .muted { color:var(--muted); font-size:14px; }
+  .pick { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:28px 16px; border:2px dashed var(--line); border-radius:16px; background:var(--card); cursor:pointer; text-align:center; }
+  .pick strong { font-size:17px; color:var(--accent); }
+  .pick span { color:var(--muted); font-size:14px; }
+  input[type=file] { display:none; }
+  button.primary { width:100%; margin-top:12px; padding:13px; font:inherit; font-weight:600; border:0; border-radius:12px; background:var(--accent); color:#fff; }
+  button.primary:disabled { opacity:.45; }
+  button.ghost { font:inherit; padding:8px 14px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
+  textarea, input[type=text], input[type=url] { width:100%; font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  textarea { min-height:110px; resize:vertical; }
+  ul { list-style:none; margin:12px 0 0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  li { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:14px; }
+  .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .state { color:var(--muted); flex:none; }
+  .state.ok { color:var(--ok); } .state.err { color:var(--err); }
+  a.dl { color:var(--accent); text-decoration:none; font-weight:600; flex:none; }
+  progress { width:100%; height:6px; margin-top:8px; accent-color:var(--accent); }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; white-space:pre-wrap; word-break:break-word; max-height:200px; overflow:auto; font-size:14px; }
+  .actions { display:flex; gap:8px; margin-top:8px; align-items:center; }
+  .msg { font-size:14px; margin-top:8px; min-height:1.4em; }
+  .msg.ok { color:var(--ok); } .msg.err { color:var(--err); }
+  /* remote */
+  #pad { height: 46vh; min-height:220px; border-radius:16px; background:var(--pad); border:1px solid var(--line); touch-action:none; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; text-align:center; user-select:none; -webkit-user-select:none; padding:16px; }
+  .btns { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px; }
+  .btns button, .keys button { font:inherit; font-size:14px; padding:12px 0; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); user-select:none; -webkit-user-select:none; }
+  .btns button.held { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .keys { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+  #kb { margin-top:10px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>__DEVICE__</h1>
+  <p id="conn">Connecting…</p>
+</header>
+
+<main>
+  <section id="tab-send" class="on">
+    <label class="pick" for="files">
+      <strong>Choose photos or files</strong>
+      <span>They're saved into the folder chosen on the computer</span>
+    </label>
+    <input id="files" type="file" multiple>
+    <button class="primary" id="send" disabled>Send to computer</button>
+    <p class="msg err hidden" id="uploadsOff">Receiving files is turned off on the computer.</p>
+    <ul id="sendList"></ul>
+  </section>
+
+  <section id="tab-get">
+    <h2>Shared from the computer</h2>
+    <p class="muted" id="getEmpty">Nothing yet. Drop files into AirBridge on the computer and they'll appear here.</p>
+    <ul id="getList"></ul>
+  </section>
+
+  <section id="tab-clip">
+    <h2>Send text to the computer</h2>
+    <textarea id="clipOut" placeholder="Paste or type here. It's copied to the computer's clipboard."></textarea>
+    <button class="primary" id="clipSend">Copy to computer</button>
+    <p class="msg" id="clipMsg"></p>
+    <h2>From the computer</h2>
+    <p class="muted" id="clipEmpty">Use “Send clipboard to phone” in AirBridge on the computer.</p>
+    <div class="hidden" id="clipInWrap">
+      <div class="box" id="clipIn"></div>
+      <div class="actions"><button class="ghost" id="clipCopy">Copy</button><span class="muted" id="clipAt"></span></div>
+    </div>
+  </section>
+
+  <section id="tab-link">
+    <h2>Open a link on the computer</h2>
+    <input type="url" id="linkUrl" placeholder="https://…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <button class="primary" id="linkSend">Open on computer</button>
+    <p class="msg" id="linkMsg"></p>
+    <p class="muted">Tip: in Safari, tap Share → Copy, then paste here.</p>
+  </section>
+
+  <section id="tab-remote">
+    <p class="msg err hidden" id="remoteOff">Remote control is turned off. Turn on “Allow phone to control mouse &amp; keyboard” in AirBridge on the computer.</p>
+    <div id="remoteOn">
+      <div id="pad">Drag to move · tap to click<br>two-finger tap = right-click · two-finger drag = scroll</div>
+      <div class="btns">
+        <button data-btn="l">Left</button>
+        <button id="hold">Hold</button>
+        <button data-btn="r">Right</button>
+      </div>
+      <input type="text" id="kb" placeholder="Tap to type on the computer" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="keys">
+        <button data-key="esc">Esc</button><button data-key="tab">Tab</button><button data-key="up">↑</button><button data-key="enter">Enter</button>
+        <button data-key="backspace">⌫</button><button data-key="left">←</button><button data-key="down">↓</button><button data-key="right">→</button>
+        <button data-key="prev">⏮</button><button data-key="playpause">⏯</button><button data-key="next">⏭</button><button data-key="mute">🔇</button>
+        <button data-key="voldown">Vol −</button><button data-key="volup">Vol +</button><button data-key="f11">F11</button><button data-key="win">⊞</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="send" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>Send</button>
+  <button data-tab="get"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>Get</button>
+  <button data-tab="clip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M9 4h6v3H9z"/></svg>Clipboard</button>
+  <button data-tab="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg>Link</button>
+  <button data-tab="remote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 12h16M12 3v9"/></svg>Remote</button>
+</nav>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const token = new URLSearchParams(location.search).get('t') || '';
+  const q = '?t=' + encodeURIComponent(token);
+  const fmt = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
+  let state = { shared: [], clip: null, remote: false, uploads: true };
+
+  // ---- tabs ----
+  function showTab(name) {
+    document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
+    document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === 'tab-' + name));
+    try { sessionStorage.setItem('tab', name); } catch {}
+  }
+  document.querySelectorAll('nav button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+  try { const t = sessionStorage.getItem('tab'); if (t && $('tab-' + t)) showTab(t); } catch {}
+
+  // ---- live state over WebSocket (falls back to polling) ----
+  let ws = null, retry = 0, pollTimer = null, expired = false;
+  function connect() {
+    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws' + q);
+    ws.onopen = () => { retry = 0; setConn(true); clearInterval(pollTimer); pollTimer = null; };
+    ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === 'state') render(m); };
+    ws.onclose = (e) => {
+      if (e.code === 4001) { expired = true; clearInterval(pollTimer); $('conn').textContent = 'This link has expired. Scan the QR code again.'; $('conn').className = 'off'; return; }
+      setConn(false);
+      if (!pollTimer) pollTimer = setInterval(poll, 4000);
+      setTimeout(connect, Math.min(10000, 1000 * 2 ** retry++));
+    };
+  }
+  function poll() { fetch('/api/state' + q).then((r) => r.ok ? r.json() : null).then((s) => s && render(s)).catch(() => {}); }
+  function setConn(ok) { if (expired) return; $('conn').textContent = ok ? 'Connected' : 'Reconnecting…'; $('conn').className = ok ? '' : 'off'; }
+  const send = (m) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+
+  function render(s) {
+    state = s;
+    $('uploadsOff').classList.toggle('hidden', s.uploads);
+    $('remoteOff').classList.toggle('hidden', s.remote);
+    $('remoteOn').classList.toggle('hidden', !s.remote);
+    // shared files
+    const ul = $('getList');
+    ul.innerHTML = '';
+    $('getEmpty').classList.toggle('hidden', s.shared.length > 0);
+    for (const f of s.shared) {
+      const li = document.createElement('li');
+      li.innerHTML = '<div class="row"><span class="name"></span><a class="dl">Download</a></div><div class="muted"></div>';
+      li.querySelector('.name').textContent = f.name;
+      li.querySelector('.muted').textContent = fmt(f.size);
+      const a = li.querySelector('a');
+      a.href = '/dl/' + f.id + q;
+      a.setAttribute('download', f.name);
+      ul.append(li);
+    }
+    // clipboard from PC
+    $('clipEmpty').classList.toggle('hidden', !!s.clip);
+    $('clipInWrap').classList.toggle('hidden', !s.clip);
+    if (s.clip) { $('clipIn').textContent = s.clip.text; $('clipAt').textContent = 'Sent ' + new Date(s.clip.at).toLocaleTimeString(); }
+  }
+
+  // ---- send files ----
+  const input = $('files');
+  input.addEventListener('change', () => { $('send').disabled = !input.files.length; });
+  function row(file) {
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="row"><span class="name"></span><span class="state">Waiting</span></div><progress max="1" value="0"></progress>';
+    li.querySelector('.name').textContent = file.name + ' · ' + fmt(file.size);
+    $('sendList').prepend(li);
+    return { state: li.querySelector('.state'), bar: li.querySelector('progress') };
+  }
+  // One request per file so a single failure doesn't lose the rest.
+  function upload(file, ui) {
+    return new Promise((resolve) => {
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload' + q);
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) { ui.bar.value = e.loaded / e.total; ui.state.textContent = Math.round(100 * e.loaded / e.total) + '%'; } };
+      xhr.onload = () => {
+        let msg = '';
+        try { msg = JSON.parse(xhr.responseText).error || ''; } catch { msg = xhr.responseText; }
+        if (xhr.status === 200) { ui.state.textContent = 'Sent'; ui.state.className = 'state ok'; ui.bar.value = 1; }
+        else { ui.state.textContent = msg || ('Failed (' + xhr.status + ')'); ui.state.className = 'state err'; }
+        resolve();
+      };
+      xhr.onerror = () => { ui.state.textContent = 'Connection lost'; ui.state.className = 'state err'; resolve(); };
+      xhr.send(fd);
+    });
+  }
+  $('send').addEventListener('click', async () => {
+    const files = Array.from(input.files);
+    input.value = '';
+    $('send').disabled = true;
+    const jobs = files.map((f) => [f, row(f)]);
+    for (const [f, ui] of jobs) { ui.state.textContent = 'Sending'; await upload(f, ui); }
+  });
+
+  // ---- clipboard & links ----
+  function postJson(path, body, msgEl, okText) {
+    msgEl.textContent = 'Sending…'; msgEl.className = 'msg';
+    return fetch(path + q, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'Failed (' + r.status + ')');
+        msgEl.textContent = okText; msgEl.className = 'msg ok';
+        return true;
+      })
+      .catch((e) => { msgEl.textContent = e.message || 'Connection lost'; msgEl.className = 'msg err'; return false; });
+  }
+  $('clipSend').onclick = () => {
+    const text = $('clipOut').value;
+    if (!text.trim()) return;
+    postJson('/api/clipboard', { text }, $('clipMsg'), 'Copied on the computer ✓');
+  };
+  // navigator.clipboard needs HTTPS; fall back to the old copy command on plain http.
+  $('clipCopy').onclick = async () => {
+    const text = state.clip ? state.clip.text : '';
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.append(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      document.execCommand('copy'); ta.remove();
+    }
+    $('clipCopy').textContent = 'Copied ✓';
+    setTimeout(() => ($('clipCopy').textContent = 'Copy'), 1500);
+  };
+  $('linkSend').onclick = () => {
+    const url = $('linkUrl').value;
+    if (!url.trim()) return;
+    postJson('/api/link', { url }, $('linkMsg'), 'Opened on the computer ✓').then((ok) => ok && ($('linkUrl').value = ''));
+  };
+
+  // ---- remote trackpad ----
+  const pad = $('pad');
+  const acc = { dx: 0, dy: 0, w: 0 };
+  let frame = 0, start = null, maxFingers = 0, moved = 0, last = null;
+  const flush = () => {
+    frame = 0;
+    const dx = Math.trunc(acc.dx), dy = Math.trunc(acc.dy), w = Math.trunc(acc.w);
+    if (dx || dy) { send({ type: 'm', dx, dy }); acc.dx -= dx; acc.dy -= dy; }
+    if (w) { send({ type: 'w', n: w }); acc.w -= w; }
+  };
+  const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
+  // Pointer acceleration: slow moves are precise, fast flicks cover the screen.
+  const accel = (d) => d * (1.4 + Math.min(Math.abs(d), 40) * 0.12);
+  const centroid = (list) => { let x = 0, y = 0; for (const t of list) { x += t.clientX; y += t.clientY; } return { x: x / list.length, y: y / list.length }; };
+  pad.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (!start) { start = Date.now(); moved = 0; maxFingers = 0; }
+    maxFingers = Math.max(maxFingers, e.touches.length);
+    last = centroid(e.touches);
+  }, { passive: false });
+  pad.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const c = centroid(e.touches);
+    const dx = c.x - last.x, dy = c.y - last.y;
+    last = c;
+    moved += Math.abs(dx) + Math.abs(dy);
+    // Two fingers scroll (content follows the fingers, like on the phone).
+    if (e.touches.length >= 2) acc.w += dy * 4;
+    else if (maxFingers < 2) { acc.dx += accel(dx); acc.dy += accel(dy); }
+    schedule();
+  }, { passive: false });
+  pad.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (e.touches.length) { last = centroid(e.touches); return; }
+    if (Date.now() - start < 260 && moved < 10) send({ type: 'c', b: maxFingers >= 2 ? 'r' : 'l' });
+    start = null;
+  }, { passive: false });
+  // Mouse fallback so the pad also works from a laptop browser.
+  let mdown = null;
+  pad.addEventListener('mousedown', (e) => { mdown = { x: e.clientX, y: e.clientY, moved: 0 }; });
+  window.addEventListener('mousemove', (e) => { if (!mdown) return; const dx = e.clientX - mdown.x, dy = e.clientY - mdown.y; mdown.x = e.clientX; mdown.y = e.clientY; mdown.moved += Math.abs(dx) + Math.abs(dy); acc.dx += accel(dx); acc.dy += accel(dy); schedule(); });
+  window.addEventListener('mouseup', () => { if (mdown && mdown.moved < 4) send({ type: 'c', b: 'l' }); mdown = null; });
+
+  document.querySelectorAll('[data-btn]').forEach((b) => (b.onclick = () => send({ type: 'c', b: b.dataset.btn })));
+  const hold = $('hold');
+  hold.onclick = () => {
+    const on = !hold.classList.contains('held');
+    hold.classList.toggle('held', on);
+    send({ type: on ? 'd' : 'u', b: 'l' });
+  };
+  document.querySelectorAll('[data-key]').forEach((b) => (b.onclick = () => send({ type: 'k', k: b.dataset.key })));
+
+  // Keyboard: keep a placeholder character so Backspace always fires an event.
+  const kb = $('kb');
+  const SENTINEL = '​';
+  const resetKb = () => { kb.value = SENTINEL; kb.setSelectionRange(1, 1); };
+  kb.addEventListener('focus', resetKb);
+  kb.addEventListener('beforeinput', (e) => {
+    e.preventDefault();
+    if (e.inputType === 'deleteContentBackward') send({ type: 'k', k: 'backspace' });
+    else if (e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph') send({ type: 'k', k: 'enter' });
+    else if (e.data) send({ type: 't', s: e.data });
+    resetKb();
+  });
+  kb.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send({ type: 'k', k: 'enter' }); } });
+
+  connect();
+  poll();
+</script>
+</body>
+</html>
