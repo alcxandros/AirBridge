@@ -55,6 +55,9 @@ On those systems the remote control and output picker aren't available.
   restarts it after a crash, and passes the settings through (`-n <name> -nh -p 7100
   -vs d3d12videosink -as wasapisink`, plus `-pin`, `-fs`, `-h265`, `-nc` when enabled).
   A persistent key (`-key`) lets iOS remember the receiver.
+  If the PC can't run the D3D12 renderer (older GPU or driver, VM), AirBridge switches
+  to `d3d11videosink`, then `autovideosink`, and remembers the choice in
+  `video-renderer.txt` in its data folder (delete it to try D3D12 again).
 - **Phone server** (`src/phoneServer.js`): HTTP and a WebSocket in the Electron main
   process. The QR code holds the PC's LAN address and a random token, and every request
   and WebSocket needs that token. **New link** in the app invalidates the old QR code

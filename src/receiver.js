@@ -13,6 +13,19 @@ const EXE = IS_WIN ? 'uxplay.exe' : 'uxplay';
 // UxPlay uses TCP n..n+2 and UDP n..n+2.
 const BASE_PORT = 7100;
 
+// Video renderers to try on Windows, best first. D3D12 needs a DX12-capable GPU
+// and driver; D3D11 also runs on older GPUs and on the software (WARP) adapter.
+const WIN_SINKS = ['d3d12videosink', 'd3d11videosink', 'autovideosink'];
+
+/** True when a UxPlay log line says the current video renderer can't work on this PC. */
+function isRendererFailure(line, sink) {
+  if (/Failed to initialize GStreamer video renderer/i.test(line)) return true;
+  const m = line.match(/GStreamer error \(video\): (\S+) (.*)$/);
+  if (!m || /Output window was closed/i.test(m[2])) return false;
+  const tag = sink.replace(/videosink$/, ''); // d3d12 / d3d11
+  return m[1].toLowerCase().includes(tag);
+}
+
 /** Locate the UxPlay bundle: packaged resources, then ./vendor, then PATH. */
 function findUxPlay(resourcesPath, appRoot) {
   const candidates = [
@@ -26,9 +39,9 @@ function findUxPlay(resourcesPath, appRoot) {
   return IS_WIN ? null : { exe: 'uxplay', root: null };
 }
 
-function buildArgs(settings, keyFile) {
+function buildArgs(settings, keyFile, videoSink = WIN_SINKS[0]) {
   const args = ['-n', settings.deviceName, '-nh', '-p', String(BASE_PORT)];
-  if (IS_WIN) args.push('-vs', 'd3d12videosink');
+  if (IS_WIN && videoSink !== 'autovideosink') args.push('-vs', videoSink);
   if (settings.audioMode === 'phone') {
     // AirBridge patch: advertise no audio support so iOS may keep sound on the phone.
     args.push('-noaudiofeat');
@@ -62,6 +75,29 @@ class Receiver extends EventEmitter {
     this.wantRunning = false;
     this.restarts = [];
     this.logTail = [];
+    this.sinkFile = path.join(dataDir, 'video-renderer.txt');
+    this.sinkIndex = 0;
+    try {
+      const saved = fs.readFileSync(this.sinkFile, 'utf8').trim();
+      if (WIN_SINKS.includes(saved)) this.sinkIndex = WIN_SINKS.indexOf(saved);
+    } catch {}
+  }
+
+  get videoSink() {
+    return WIN_SINKS[this.sinkIndex];
+  }
+
+  /** Switch to the next video renderer after the current one failed. */
+  fallBack() {
+    if (!IS_WIN || this.sinkIndex >= WIN_SINKS.length - 1) return false;
+    const from = this.videoSink;
+    this.sinkIndex++;
+    this.log(`AirBridge: ${from} doesn't work on this PC, switching to ${this.videoSink}`);
+    try {
+      fs.mkdirSync(this.dataDir, { recursive: true });
+      fs.writeFileSync(this.sinkFile, this.videoSink);
+    } catch {}
+    return true;
   }
 
   status() {
@@ -136,7 +172,7 @@ class Receiver extends EventEmitter {
         this.log(`cannot create recordings folder: ${e.message}`);
       }
     }
-    const args = buildArgs(run, path.join(this.dataDir, 'uxplay-key.pem'));
+    const args = buildArgs(run, path.join(this.dataDir, 'uxplay-key.pem'), this.videoSink);
     this.log(`> ${EXE} ${args.join(' ')}`);
     this.setState('starting');
 
@@ -148,6 +184,11 @@ class Receiver extends EventEmitter {
 
     const onLine = (line) => {
       this.log(line);
+      if (IS_WIN && !this.switchingSink && isRendererFailure(line, this.videoSink) && this.fallBack()) {
+        // Restart UxPlay with the next renderer; the exit handler starts it again.
+        this.switchingSink = true;
+        setTimeout(() => this.proc === proc && proc.kill(), 300);
+      }
       if (/Initialized server socket|using network ports/i.test(line) && this.state === 'starting') this.setState('running');
       if (/AirBridge: all clients disconnected/.test(line) && this.client) {
         this.client = null;
@@ -174,6 +215,11 @@ class Receiver extends EventEmitter {
       this.client = null;
       this.log(`uxplay exited (code ${code}${signal ? ', ' + signal : ''})`);
       if (!this.wantRunning) return this.setState('stopped');
+      if (this.switchingSink) {
+        this.switchingSink = false;
+        this.setState('starting', `Switching video renderer to ${this.videoSink}`);
+        return setTimeout(() => this.wantRunning && this.start(this.settings), 500);
+      }
       // Crash-restart, but give up after 5 crashes in a minute.
       const now = Date.now();
       this.restarts = this.restarts.filter((t) => now - t < 60000).concat(now);
@@ -231,4 +277,4 @@ function lines(stream, cb) {
   });
 }
 
-module.exports = { Receiver, buildArgs, findUxPlay, BASE_PORT };
+module.exports = { Receiver, buildArgs, findUxPlay, isRendererFailure, BASE_PORT, WIN_SINKS };

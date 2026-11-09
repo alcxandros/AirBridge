@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const WebSocket = require('ws');
 const { PhoneServer, sanitizeFilename, inputToCommands, normalizeLink } = require('../src/phoneServer');
-const { buildArgs } = require('../src/receiver');
+const { buildArgs, isRendererFailure } = require('../src/receiver');
 const { parseAudioList } = require('../src/helper');
 const { authString } = require('../src/obs');
 
@@ -519,4 +519,17 @@ test('streamer mode spots OBS in the process list', () => {
   assert.equal(obsInTasklist(row('obs.exe')), true);
   assert.equal(obsInTasklist([row('explorer.exe'), row('obs-browser-page.exe'), row('jobs64.exe')].join('\r\n')), false);
   assert.equal(obsInTasklist(''), false);
+});
+
+test('video renderer fallback: picks the sink and spots its failures', () => {
+  if (process.platform === 'win32') {
+    assert.ok(buildArgs({ deviceName: 'PC' }).join(' ').includes('-vs d3d12videosink'));
+    assert.ok(buildArgs({ deviceName: 'PC' }, null, 'd3d11videosink').join(' ').includes('-vs d3d11videosink'));
+    assert.ok(!buildArgs({ deviceName: 'PC' }, null, 'autovideosink').includes('-vs'));
+  }
+  assert.ok(isRendererFailure('Failed to initialize GStreamer video renderer 1', 'd3d12videosink'));
+  assert.ok(isRendererFailure('GStreamer error (video): d3d12videosink0 Failed to create device', 'd3d12videosink'));
+  assert.ok(!isRendererFailure('GStreamer error (video): d3d12videosink0 Output window was closed', 'd3d12videosink'));
+  assert.ok(!isRendererFailure('GStreamer error (video): avdec_h264-0 Internal data stream error.', 'd3d12videosink'));
+  assert.ok(!isRendererFailure('GStreamer error (video): d3d12videosink0 boom', 'd3d11videosink'));
 });
